@@ -194,7 +194,8 @@ def afficher_portefeuille():
 
             st.plotly_chart(
                 fig,
-                use_container_width=True
+                use_container_width=True,
+                key="graphique_position"
             )
             st.divider()
 

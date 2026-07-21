@@ -120,7 +120,8 @@ elif menu == "📈 Marchés":
 
         st.plotly_chart(
             fig,
-            use_container_width=True
+            use_container_width=True,
+            key="graphique_marché"
         )
 # =====================================================
 # ACTIONS
