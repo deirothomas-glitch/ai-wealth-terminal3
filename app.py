@@ -113,7 +113,7 @@ elif menu == "📈 Marchés":
         # Graphique
         # ============================
 
-        fig = create_candlestick(
+        fig = create_candlestick_chart(
             historique,
             symbole
         )
@@ -217,7 +217,7 @@ elif menu == "₿ Cryptomonnaies":
     if historique.empty:
         st.error("Impossible de récupérer les données.")
     else:
-        fig = create_candlestick(
+        fig = create_candlestick_chart(
             historique,
             crypto
         )

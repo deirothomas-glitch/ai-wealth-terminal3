@@ -3,7 +3,7 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 from st_aggrid import AgGrid, GridOptionsBuilder
-from charts import create_candlestick
+from charts import create_candlestick_chart
 from data import get_stock_history
 from ai_analysis import analyse_marche
 from datetime import datetime
@@ -190,7 +190,7 @@ def afficher_portefeuille():
 
             historique = get_stock_history(actif)
 
-            fig = create_candlestick(historique, actif)
+            fig = create_candlestick_chart(historique, actif)
 
             st.plotly_chart(
                 fig,
