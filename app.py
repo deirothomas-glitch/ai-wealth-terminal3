@@ -4,7 +4,6 @@ import yfinance as yf
 from portfolio import afficher_portefeuille
 from data import get_stock_history, get_stock_info
 from indicators import moving_average, ema
-from charts import create_candlestick
 from ai_analysis import analyse_marche
 from dashboard import afficher_dashboard
 from charts import create_candlestick_chart
