@@ -18,11 +18,13 @@ def afficher_actualites(symbole="AAPL"):
 
         for article in actualites[:5]:
 
-            titre = article.get("title", "Sans titre")
+            content = article.get("content", {})
 
-            lien = article.get("link", "#")
+            titre = content.get("title", "Sans titre")
 
-            source = article.get("publisher", "Source inconnue")
+            lien = content.get("canonicalUrl", {}).get("url", "#")
+
+            source = content.get("provider", {}).get("displayName", "Source inconnue")
 
             st.markdown(f"### {titre}")
             st.caption(source)
@@ -32,3 +34,24 @@ def afficher_actualites(symbole="AAPL"):
     except Exception as e:
 
         st.error(f"Erreur : {e}")
+        
+def recuperer_actualites(symbole="AAPL", limite=5):
+    try:
+        ticker = yf.Ticker(symbole)
+        actualites = ticker.news
+
+        resultat = []
+
+        for article in actualites[:limite]:
+            content = article.get("content", {})
+
+            resultat.append({
+                "titre": content.get("title", ""),
+                "source": content.get("provider", {}).get("displayName", ""),
+                "resume": content.get("summary", ""),
+            })
+
+        return resultat
+
+    except Exception:
+        return []

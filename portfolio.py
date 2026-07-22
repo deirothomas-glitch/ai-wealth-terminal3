@@ -5,7 +5,6 @@ import plotly.graph_objects as go
 from st_aggrid import AgGrid, GridOptionsBuilder
 from charts import create_candlestick_chart
 from data import get_stock_history
-from ai_analysis import analyse_marche
 from datetime import datetime
 from storage import charger_portefeuille, sauvegarder_portefeuille
 
@@ -206,16 +205,19 @@ def afficher_portefeuille():
                 prix = historique["Close"].iloc[-1]
 
                 with st.spinner("Analyse en cours..."):
+                    pass
 
-                    resultat = analyse_marche(
-                        actif,
-                        prix
-                    )
+ #            if symbole:
+ #                     resultat = analyse_marche(
+ #                        actif,
+ #                        prix
+ #                    )
 
-                st.success("Analyse terminée")
-                st.markdown(resultat)
+ #                st.success("Analyse terminée")
+ #                st.markdown(resultat)
 
                 st.divider()
+            
                 st.subheader("📈 Historique du portefeuille")
 
                 df_historique = pd.DataFrame(

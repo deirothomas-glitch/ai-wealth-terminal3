@@ -1,11 +1,19 @@
 import streamlit as st
 import yfinance as yf
 
+from ticker import afficher_ticker
 from news import afficher_actualites
+from charts import create_candlestick_chart
+from ui.cards import metric_card, signal_card
 
 def afficher_dashboard():
 
     st.title("📈 AI Wealth Terminal")
+    afficher_ticker()
+    st.divider()
+    st.caption("📡 Données en temps réel • IA • Actions • Crypto • ETF")
+
+    st.success("🟢 Les marchés sont connectés")
 
     st.subheader("Dashboard des marchés")
 

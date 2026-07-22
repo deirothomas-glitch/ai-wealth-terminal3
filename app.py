@@ -4,10 +4,19 @@ import yfinance as yf
 from portfolio import afficher_portefeuille
 from data import get_stock_history, get_stock_info
 from indicators import moving_average, ema
-from ai_analysis import analyse_marche
 from dashboard import afficher_dashboard
 from charts import create_candlestick_chart
+from market import afficher_marche
+from scanner import afficher_scanner
+from openai import OpenAI
+import os
+from ai_analysis import analyser_actif
+from scoring import calculer_score
+from ui.theme import apply_theme
 
+
+
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 # =====================================================
 # CONFIGURATION
 # =====================================================
@@ -17,6 +26,8 @@ st.set_page_config(
     page_icon="📈",
     layout="wide"
 )
+
+apply_theme()
 
 # =====================================================
 # SIDEBAR
@@ -32,7 +43,9 @@ menu = st.sidebar.radio(
         "📊 Actions",
         "₿ Cryptomonnaies",
         "💼 Portefeuille",
-        "🤖 Assistant IA"
+        "🤖 Assistant IA",
+        "🔎 Scanner"
+
     ]
 )
 
@@ -49,80 +62,7 @@ if menu == "🏠 Accueil":
 # =====================================================
 
 elif menu == "📈 Marchés":
-
-    st.header("📈 Les marchés financiers")
-
-    watchlist = [
-        "AAPL",
-        "MSFT",
-        "NVDA",
-        "AMZN",
-        "META",
-        "GOOGL",
-        "TSLA",
-        "BTC-USD",
-        "ETH-USD"
-    ]
-
-    symbole = st.sidebar.selectbox(
-        "📋 Watchlist",
-        watchlist
-    )
-
-    historique = get_stock_history(symbole)
-
-    if historique.empty:
-        st.error("Aucune donnée disponible.")
-    else:
-
-        # ============================
-        # Statistiques
-        # ============================
-        fig = create_candlestick_chart(historique, symbole)
-        st.plotly_chart(fig, use_container_width=True)
-        dernier_prix = historique["Close"].iloc[-1]
-        variation = historique["Close"].pct_change().iloc[-1] * 100
-        plus_haut = historique["High"].max()
-        plus_bas = historique["Low"].min()
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        col1.metric(
-            "💲 Cours",
-            f"{dernier_prix:.2f}"
-        )
-
-        col2.metric(
-            "📈 Variation",
-            f"{variation:.2f}%"
-        )
-
-        col3.metric(
-            "⬆ Plus haut",
-            f"{plus_haut:.2f}"
-        )
-
-        col4.metric(
-            "⬇ Plus bas",
-            f"{plus_bas:.2f}"
-        )
-
-        st.divider()
-
-        # ============================
-        # Graphique
-        # ============================
-
-        fig = create_candlestick_chart(
-            historique,
-            symbole
-        )
-
-        st.plotly_chart(
-            fig,
-            use_container_width=True,
-            key="graphique_marché"
-        )
+    afficher_marche()
 # =====================================================
 # ACTIONS
 # =====================================================
@@ -136,64 +76,83 @@ elif menu == "📊 Actions":
         value="MSFT"
     )
 
-    try:
+    info = get_stock_info(symbole)
+    historique = get_stock_history(symbole)
 
-        info = get_stock_info(symbole)
+    resultat = calculer_score(info, historique)
 
-        col1, col2 = st.columns(2)
+    st.write("historique:", historique)
+    if historique is not None:
+        st.write("Nombre de lignes : ", len(historique))
 
-        with col1:
-            st.metric(
-                "Entreprise",
-                info.get("longName", "Inconnue")
-            )
+    col1, col2 = st.columns(2)
 
-            st.metric(
-                "Cours actuel",
-                info.get("currentPrice", "N/A")
-            )
+    with col1:
+        st.metric(
+            "Entreprise",
+            info.get("longName", "Inconnue")
+        )
 
-            st.metric(
-                "Capitalisation",
-                info.get("marketCap", "N/A")
-            )
+        st.metric(
+            "Cours actuel",
+            info.get("currentPrice", "N/A")
+        )
 
-        with col2:
-            st.metric(
-                "Secteur",
-                info.get("sector", "N/A")
-            )
+        st.metric(
+            "Capitalisation",
+            info.get("marketCap", "N/A")
+        )
 
-            st.metric(
+    with col2:
+        st.metric(
+            "Secteur",
+            info.get("sector", "N/A")
+        )
+
+        st.metric(
                 "Industrie",
                 info.get("industry", "N/A")
             )
 
-            st.metric(
+        st.metric(
                 "Pays",
                 info.get("country", "N/A")
             )
 
+        st.subheader("📈 Graphique du cours")
+
+        if historique is not None and not historique.empty:
+            fig = create_candlestick_chart(
+                historique,
+                info.get("longName", symbole)
+            )
+            st.plotly_chart(fig, key="graph_action")
+            st.subheader("🤖 Score IA")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.metric("Score IA", f"{resultat['score']}/100")
+
+            with col2:
+                st.metric("Signal", resultat["signal"])
+
+            st.subheader("📈 Indicateurs techniques")
+
+            close = historique["Close"]
+
+            ma20 = close.rolling(20).mean()
+            ema20 = close.ewm(span=20).mean()
+
+            st.metric("📊 Dernier cours", f"{close.iloc[-1]:.2f} $")
+            st.metric("📈 Moyenne mobile 20", f"{ma20.iloc[-1]:.2f} $")
+            st.metric("⚡ EMA 20", f"{ema20.iloc[-1]:.2f} $")
+        
+        else:
+            st.warning("Aucune donnée historique disponible.")
+
         st.divider()
 
-        if st.button("🤖 Analyser avec l'IA"):
-
-            prix = info.get("currentPrice", "N/A")
-
-            with st.spinner("Analyse en cours..."):
-
-                resultat = analyse_marche(
-                    symbole,
-                    prix
-                )
-
-            st.success("Analyse terminée")
-
-            st.markdown(resultat)
-
-    except Exception as e:
-
-        st.error(e)
 # =====================================================
 # CRYPTOMONNAIES
 # =====================================================
@@ -222,11 +181,11 @@ elif menu == "₿ Cryptomonnaies":
             historique,
             crypto
         )
-
         st.plotly_chart(
             fig,
-            use_container_width=True
-        )
+            use_container_width=True,
+            key="graph_crypto",
+        )  
 
 
 # =====================================================
@@ -252,14 +211,27 @@ elif menu == "🤖 Assistant IA":
                 "currentPrice",
                 "N/A"
             )
+            historique = get_stock_history(symbole)
+            st.subheader("📈 Graphique")
 
+            if historique is not None and not historique.empty:
+                fig = create_candlestick_chart(
+                    historique,
+                    info.get("longName", symbole)
+                )
+
+            st.divider()
             with st.spinner(
                 "Analyse en cours..."
             ):
 
-                resultat = analyse_marche(
-                    symbole,
-                    prix
+                resultat = analyser_actif(
+                    nom = info.get("longName", symbole),
+                    symbole = symbole,
+                    prix = prix,
+                    score = 80,
+                    rsi ="N/A",
+                    tendance = "Neutre"
                 )
 
             st.success("Analyse terminée")
@@ -304,3 +276,6 @@ elif menu == "🤖 Assistant IA":
 elif menu == "💼 Portefeuille":
 
     afficher_portefeuille()
+    
+elif menu == "🔎 Scanner":
+    afficher_scanner()
