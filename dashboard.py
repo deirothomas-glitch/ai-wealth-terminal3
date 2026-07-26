@@ -1,6 +1,6 @@
 """Page d'accueil du terminal."""
 
-from datetime import date
+from datetime import date, datetime
 
 import streamlit as st
 
@@ -10,6 +10,7 @@ from config import APP_NAME, APP_VERSION, AVAILABLE_PERIODS
 from core.alerts import construire_alertes
 from core.analysis_context import construire_contexte_analyse
 from core.daily_briefing import construire_briefing
+from core.cockpit import construire_cockpit
 from core.decision import construire_decision
 from core.risk import calculer_atr, construire_plan_risque
 from indicators import macd, rsi
@@ -24,6 +25,8 @@ from ui.ai_analysis_card import afficher_analyse_ia
 from ui.daily_briefing_card import afficher_briefing
 from ui.news_card import afficher_actualites_normalisees
 from services.ai_market_analysis import analyser_contexte_marche
+from services.ai_client import obtenir_cle_api
+from ui.investor_cockpit import afficher_cockpit
 
 
 def _cartes_marche(titre, elements):
@@ -36,62 +39,64 @@ def _cartes_marche(titre, elements):
             element["nom"], f"{element['prix']:,.2f}", f"{element['variation']:+.2f}%")
 
 
+def _preparer_cockpit(indices_marche, cryptos_marche):
+    """Prépare le Cockpit avec les données déjà chargées ou mises en cache."""
+    session = st.session_state
+    try:
+        openai_disponible = obtenir_cle_api(getattr(st, "secrets", None)) is not None
+    except Exception:
+        openai_disponible = False
+    return construire_cockpit(
+        indices=indices_marche,
+        cryptos=cryptos_marche,
+        opportunites=session.get("opportunites_classees", []),
+        positions=session.get("portfolio", []),
+        prix_portefeuille=session.get("portfolio_prix", {}),
+        journal=session.get("trading_journal", []),
+        alertes=session.get("alertes_positions", []),
+        actualites=session.get("actualites_marche", []),
+        portefeuille_charge="portfolio" in session,
+        openai_disponible=openai_disponible,
+        mise_a_jour=datetime.now().astimezone().strftime("%d/%m/%Y %H:%M"),
+    )
+
+
 def afficher_dashboard():
     st.title(APP_NAME)
     st.caption(f"Version {APP_VERSION} · Tableau de bord de marché")
-    if hasattr(st, "session_state"):
-        positions_session = st.session_state.get("portfolio", [])
-        opportunites_session = st.session_state.get("opportunites_classees", [])
-        alertes_session = st.session_state.get("alertes_positions", [])
-        actualites_session = st.session_state.get("actualites_marche", [])
-        st.subheader("Vue d’ensemble")
-        cartes = st.columns(4)
-        cartes[0].metric("Positions suivies", len(positions_session) if isinstance(positions_session, list) else 0)
-        cartes[1].metric("Opportunités", len(opportunites_session) if isinstance(opportunites_session, list) else 0)
-        cartes[2].metric("Alertes importantes", len(alertes_session) if isinstance(alertes_session, list) else 0)
-        cartes[3].metric("Actualités disponibles", len(actualites_session) if isinstance(actualites_session, list) else 0)
-        st.caption("Synthèse construite à partir des données déjà chargées dans la session.")
     indices_marche = recuperer_indices()
     cryptos_marche = recuperer_cryptos()
-    _cartes_marche("🌍 Marchés mondiaux", indices_marche)
-    _cartes_marche("🪙 Cryptomonnaies", cryptos_marche)
-    st.divider()
-    if hasattr(st, "subheader"):
-        st.subheader("🎯 Opportunités à surveiller")
-        opportunites = st.session_state.get("opportunites_classees", [])
-        if not opportunites:
-            st.info("Lancez le Sca" "nner pour afficher les opportunités du dernier classement.")
-        else:
-            for opportunite in opportunites[:5]:
-                raison = next(iter(opportunite.get("raisons_principales", [])), "Aucune raison disponible")
-                vigilance = next(iter(opportunite.get("points_vigilance", [])), "Aucun point de vigilance majeur")
-                score_global = opportunite.get("score_global")
-                score_texte = "—" if score_global is None else f"{score_global:.1f}"
-                st.markdown(f"**{opportunite['symbole']} · {opportunite['strategie']} · {score_texte}/100 · {opportunite['confiance']} · {opportunite['decision']}**  \n{raison}  \n_Vigilance : {vigilance}_")
+    cockpit = None
     actualites_briefing = []
-    if hasattr(st, "session_state"):
-        actualites_briefing = st.session_state.get("actualites_marche", [])
-        positions_briefing = st.session_state.get("alertes_positions", [])
-        briefing = construire_briefing(
-            indices=indices_marche + cryptos_marche,
-            opportunites=st.session_state.get("opportunites_classees", []),
-            positions=positions_briefing,
-            actualites=actualites_briefing,
-            qualite={"niveau": "partiel" if not actualites_briefing else "bon"},
-            date_generation=date.today().isoformat(),
-        )
-        briefing_affichage = {**briefing, "opportunites_a_surveiller": []}
-        afficher_briefing(briefing_affichage)
-        if st.button("🤖 Générer la synthèse IA du briefing", key="briefing_ia"):
-            with st.spinner("Synthèse du briefing en cours..."):
-                contexte_briefing = construire_contexte_analyse(
-                    marche={"briefing": briefing},
-                    actualites=actualites_briefing,
-                    limites=["Briefing construit à partir des données déjà disponibles."],
-                )
-                afficher_analyse_ia(analyser_contexte_marche(
-                    contexte_briefing, "Résume les priorités du briefing du marché."
-                ))
+    if "_preparer_cockpit" in globals() and hasattr(st, "session_state"):
+        try:
+            cockpit = _preparer_cockpit(indices_marche, cryptos_marche)
+            actualites_briefing = st.session_state.get("actualites_marche", [])
+            analyse_cockpit = st.session_state.get("cockpit_briefing_ia")
+            demande_briefing_ia = afficher_cockpit(st, cockpit, analyse_cockpit)
+            if demande_briefing_ia:
+                with st.spinner("Synthèse du briefing en cours..."):
+                    contexte_briefing = construire_contexte_analyse(
+                        marche={"cockpit": cockpit.get("marche", {})},
+                        portefeuille=cockpit.get("portefeuille", {}),
+                        actualites=actualites_briefing,
+                        limites=[
+                            "Briefing construit à partir des données déjà disponibles.",
+                            "Certaines données peuvent être partielles ou différées.",
+                        ],
+                    )
+                    st.session_state.cockpit_briefing_ia = analyser_contexte_marche(
+                        contexte_briefing,
+                        "Résume le marché, le portefeuille, les points positifs et les vigilances.",
+                    )
+                st.rerun()
+        except Exception:
+            st.warning(
+                "Le Cockpit est temporairement partiel. L’analyse détaillée reste accessible ci-dessous."
+            )
+    else:
+        _cartes_marche("🌍 Marchés mondiaux", indices_marche)
+        _cartes_marche("🪙 Cryptomonnaies", cryptos_marche)
     st.divider()
 
     col1, col2 = st.columns(2)
