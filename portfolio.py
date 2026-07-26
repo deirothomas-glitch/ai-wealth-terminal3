@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 from core.portfolio import (calculer_score_diversification,calculer_taille_position,construire_resume_global,construire_statistiques_journal,convertir_nombre_fini,convertir_nombre_positif,normaliser_position,resumer_position,valider_position)
 from core.position_alerts import generer_alertes_positions
+from core.portfolio_intelligence import analyser_portefeuille
 from market_data import charger_donnees,dernier_prix
 from services.portfolio_operations import ajouter_position,cloturer_position,modifier_position,supprimer_position
 from services.portfolio_prices import charger_prix_portefeuille
@@ -14,6 +15,7 @@ from services.news_sources import YahooNewsSource
 from storage import charger_journal_avec_erreur,charger_portefeuille_avec_erreur
 from ui.portfolio_stats import afficher_statistiques_portefeuille
 from ui.portfolio_summary import afficher_resume_portefeuille
+from ui.portfolio_intelligence_card import afficher_intelligence_portefeuille
 from ui.position_alert_card import afficher_alerte_position
 from ui.news_card import afficher_actualites_normalisees
 
@@ -97,6 +99,8 @@ def afficher_portefeuille():
         for e in _rafraichir(): st.warning(e)
     resume=construire_resume_global(st.session_state.portfolio,st.session_state.portfolio_prix,st.session_state.trading_journal); afficher_resume_portefeuille(st,resume)
     if resume["positions_sans_prix"]: st.caption(f"{resume['positions_sans_prix']} position(s) sans prix : les totaux actuels restent indisponibles.")
+    intelligence=analyser_portefeuille(st.session_state.portfolio,st.session_state.portfolio_prix)
+    afficher_intelligence_portefeuille(st,intelligence)
     _ajout(); st.subheader("Positions ouvertes")
     lignes=[resumer_position(p,st.session_state.portfolio_prix.get(p["symbole"])) for p in st.session_state.portfolio]
     if not lignes: st.info("Votre portefeuille est vide. Ajoutez votre première position ci-dessus.")

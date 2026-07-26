@@ -38,7 +38,7 @@ class CockpitTests(unittest.TestCase):
         premier = construire_cockpit(**entree); second = construire_cockpit(**entree)
         self.assertEqual(premier, second)
         self.assertEqual(entree, avant)
-        self.assertEqual(list(premier), ["bandeau", "marche", "portefeuille", "opportunites", "alertes", "scenario_principal", "briefing", "agenda"])
+        self.assertEqual(list(premier), ["bandeau", "marche", "portefeuille", "intelligence_portefeuille", "opportunites", "alertes", "scenario_principal", "briefing", "agenda"])
         json.dumps(premier, ensure_ascii=False, allow_nan=False)
 
     def test_bandeau_repose_uniquement_sur_disponibilites_reelles(self):

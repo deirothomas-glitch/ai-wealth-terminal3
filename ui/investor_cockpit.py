@@ -4,6 +4,7 @@ from html import escape
 import math
 
 from ui.scenario_card import afficher_scenario_principal
+from ui.portfolio_intelligence_card import afficher_intelligence_portefeuille
 
 
 def _nombre(valeur, suffixe=""):
@@ -63,6 +64,11 @@ def afficher_cockpit(st, cockpit, analyse_ia=None):
             f"Pertes réalisées : {_nombre(portefeuille.get('pertes'), ' €')}"
         )
 
+    afficher_intelligence_portefeuille(
+        st,
+        donnees.get("intelligence_portefeuille", {}),
+        compact=True,
+    )
     afficher_scenario_principal(donnees.get("scenario_principal", {}), st)
 
     st.subheader("🎯 Top opportunités")

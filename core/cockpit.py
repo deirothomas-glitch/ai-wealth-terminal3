@@ -6,6 +6,7 @@ import math
 from typing import Any, Mapping, Sequence
 
 from core.portfolio import construire_resume_global, convertir_nombre_fini
+from core.portfolio_intelligence import analyser_portefeuille
 from core.scenario_engine import construire_scenarios
 
 
@@ -155,6 +156,10 @@ def construire_cockpit(
     portefeuille = _resume_portefeuille(
         positions_valides, prix_valides, journal_valide, bool(portefeuille_charge)
     )
+    intelligence_portefeuille = analyser_portefeuille(
+        positions if portefeuille_charge else None,
+        prix_valides,
+    )
     if not portefeuille_charge:
         resume_portefeuille = "Indisponible"
     elif portefeuille["valeur_totale"] is None:
@@ -205,6 +210,7 @@ def construire_cockpit(
             "risque_global": "Élevé" if any(x["niveau"] == "attention" for x in alertes_prioritaires) else ("À surveiller" if alertes_prioritaires else "Non évalué"),
         },
         "portefeuille": portefeuille,
+        "intelligence_portefeuille": intelligence_portefeuille,
         "opportunites": _top_opportunites(opportunites_valides),
         "alertes": alertes_prioritaires,
         "scenario_principal": scenario_principal,
