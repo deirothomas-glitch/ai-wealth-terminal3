@@ -27,9 +27,15 @@ def afficher_assistant():
         "Posez une question sur un actif. Les faits, limites et risques restent "
         "distingués des interprétations de l’IA."
     )
+    selection_parcours = st.session_state.get("selected_asset")
+    if isinstance(selection_parcours, str) and selection_parcours and st.session_state.get("assistant_last_selected") != selection_parcours:
+        st.session_state.assistant_symbol = selection_parcours
+        st.session_state.assistant_last_selected = selection_parcours
     controles = st.columns(2)
+    if "assistant_symbol" not in st.session_state:
+        st.session_state.assistant_symbol = "AAPL"
     symbole = controles[0].text_input(
-        "Actif", "AAPL", key="assistant_symbol"
+        "Actif", key="assistant_symbol"
     ).upper().strip()
     profil = controles[1].selectbox(
         "Profil", ["Court terme", "Swing", "Tendance"], key="assistant_profile"

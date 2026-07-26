@@ -30,7 +30,9 @@ class Streamlit:
     def success(self, *args, **kwargs): self.appels.append(("success", args, kwargs))
     def error(self, *args, **kwargs): self.appels.append(("error", args, kwargs))
     def write(self, *args, **kwargs): self.appels.append(("write", args, kwargs))
-    def button(self, *args, **kwargs): self.appels.append(("button", args, kwargs)); return self.cliquer
+    def button(self, *args, **kwargs):
+        self.appels.append(("button", args, kwargs))
+        return self.cliquer and kwargs.get("key") == "cockpit_briefing_generate"
 
 
 class InvestorCockpitTests(unittest.TestCase):
@@ -38,7 +40,7 @@ class InvestorCockpitTests(unittest.TestCase):
         st = Streamlit(); demande = afficher_cockpit(st, construire_cockpit())
         texte = str(st.appels).casefold()
         self.assertFalse(demande)
-        for attendu in ("résumé marché", "résumé portefeuille", "top opportunités", "alertes prioritaires", "briefing ia", "évènements de marché"):
+        for attendu in ("résumé marché", "résumé portefeuille", "point de départ du parcours", "alertes prioritaires", "briefing ia", "évènements de marché"):
             self.assertIn(attendu, texte)
         self.assertIn("ne constituent ni une garantie de gain ni un ordre automatique", texte)
 
@@ -47,7 +49,7 @@ class InvestorCockpitTests(unittest.TestCase):
         demande = afficher_cockpit(st, construire_cockpit(indices=[{"variation": 1.0}]))
         self.assertTrue(demande)
         self.assertIn("données partielles", str(st.appels))
-        bouton = next(appel for appel in st.appels if appel[0] == "button")
+        bouton = next(appel for appel in st.appels if appel[0] == "button" and appel[2].get("key") == "cockpit_briefing_generate")
         self.assertEqual(bouton[2]["key"], "cockpit_briefing_generate")
         self.assertNotEqual(bouton[2]["key"], "cockpit_briefing_ia")
 

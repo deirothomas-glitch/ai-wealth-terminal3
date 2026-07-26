@@ -52,8 +52,19 @@ def _afficher_scenarios_actif(decision, plan_risque):
 
 def afficher_analyse_actif(titre, valeur_defaut):
     st.header(titre)
-    symbole = st.text_input("Symbole", valeur_defaut,
-                            key=f"analyse_{valeur_defaut}").upper().strip()
+    cle_symbole = f"analyse_{valeur_defaut}"
+    session_disponible = hasattr(st, "session_state")
+    session = st.session_state if session_disponible else {}
+    selection_parcours = session.get("selected_asset")
+    marqueur = f"{cle_symbole}_selection_parcours"
+    if isinstance(selection_parcours, str) and selection_parcours and session.get(marqueur) != selection_parcours:
+        session[cle_symbole] = selection_parcours
+        session[marqueur] = selection_parcours
+    if session_disponible:
+        session.setdefault(cle_symbole, valeur_defaut)
+        symbole = st.text_input("Symbole", key=cle_symbole).upper().strip()
+    else:
+        symbole = st.text_input("Symbole", valeur_defaut, key=cle_symbole).upper().strip()
     historique = charger_donnees(symbole, "1y")
     if historique is None:
         st.warning("Aucune donnée disponible pour ce symbole.")
@@ -128,7 +139,6 @@ def afficher_analyse_actif(titre, valeur_defaut):
         _afficher_scenarios_actif(decision, plan_risque)
 
     cle_news = f"actualites_{valeur_defaut}_{symbole}"
-    session_disponible = hasattr(st, "session_state")
     if session_disponible and st.button(
         "📰 Actualiser les actualités", key=f"news_{valeur_defaut}"
     ):
@@ -176,7 +186,7 @@ menu = st.sidebar.radio("Choisissez une section", [
     "🏠 Accueil", "📈 Marchés", "📊 Actions", "₿ Cryptomonnaies",
     "💼 Portefeuille", "🔎 Scanner", "🧭 Stratégies", "📰 Actualités",
     "🤖 Assistant IA",
-])
+], key="navigation")
 
 if menu == "🏠 Accueil":
     afficher_dashboard()

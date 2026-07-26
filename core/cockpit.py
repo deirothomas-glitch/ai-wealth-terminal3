@@ -8,7 +8,6 @@ from typing import Any, Mapping, Sequence
 from core.data_quality import construire_etat_sources, evaluer_qualite_globale
 from core.portfolio import construire_resume_global, convertir_nombre_fini
 from core.portfolio_intelligence import analyser_portefeuille
-from core.scenario_engine import construire_scenarios
 
 
 def _liste(valeur: Any) -> list[dict[str, Any]]:
@@ -228,15 +227,6 @@ def construire_cockpit(
     if alertes_prioritaires:
         vigilances.append(f"{len(alertes_prioritaires)} alerte(s) prioritaire(s) nécessitent une revue.")
     donnees_partielles = qualite != "Bonne"
-    premiere_opportunite = opportunites_valides[0] if opportunites_valides else {}
-    scenario_principal = construire_scenarios({
-        "facteurs_favorables": premiere_opportunite.get("raisons_principales", []),
-        "facteurs_defavorables": premiere_opportunite.get("points_vigilance", []),
-        "risques": [x["message"] for x in alertes_prioritaires],
-        "donnees_manquantes": ["volatilite_globale"] + (["actualites"] if not actualites_valides else []),
-        "conditions_invalidation": [],
-        "qualite": qualite,
-    }, horizon=premiere_opportunite.get("strategie", "swing"))
     return {
         "bandeau": {
             "mise_a_jour": _texte(mise_a_jour),
@@ -262,7 +252,6 @@ def construire_cockpit(
         "intelligence_portefeuille": intelligence_portefeuille,
         "opportunites": _top_opportunites(opportunites_valides),
         "alertes": alertes_prioritaires,
-        "scenario_principal": scenario_principal,
         "briefing": {
             "resume_marche": tendance,
             "resume_portefeuille": resume_portefeuille,

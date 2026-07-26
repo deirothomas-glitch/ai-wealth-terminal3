@@ -13,9 +13,9 @@ class ScenarioIntegrationTests(unittest.TestCase):
         for interdit in ('streamlit','openai','yfinance','pandas','from services'):
             self.assertNotIn(interdit,source)
 
-    def test_cockpit_affiche_uniquement_principal(self):
+    def test_cockpit_ne_duplique_plus_les_scenarios(self):
         source=(ROOT/'ui/investor_cockpit.py').read_text(encoding='utf-8')
-        self.assertIn('afficher_scenario_principal',source)
+        self.assertNotIn('afficher_scenario_principal',source)
         self.assertNotIn('afficher_scenarios(',source)
 
     def test_assistant_affiche_trois_scenarios_apres_action(self):
@@ -36,16 +36,12 @@ class ScenarioIntegrationTests(unittest.TestCase):
         self.assertIn('afficher_analyse_actif("📊 Analyse d\'une action", "AAPL")',source)
         self.assertIn('afficher_analyse_actif("₿ Analyse d\'une cryptomonnaie", "BTC-USD")',source)
 
-    def test_scanner_scenarios_uniquement_sur_bouton_et_selection_tete(self):
+    def test_scanner_scenarios_construits_une_fois_pour_selection_explicitement_choisie(self):
         source=(ROOT/'scanner.py').read_text(encoding='utf-8')
-        tree=ast.parse(source)
-        fonction=next(x for x in tree.body if isinstance(x,ast.FunctionDef) and x.name=='afficher_scanner')
-        appel=next(x for x in ast.walk(fonction) if isinstance(x,ast.Call) and isinstance(x.func,ast.Name) and x.func.id=='afficher_scenarios')
-        blocs=[x for x in ast.walk(fonction) if isinstance(x,ast.If)]
-        self.assertTrue(any(appel in set(ast.walk(bloc)) for bloc in blocs))
-        self.assertIn('scanner_scenarios',source)
-        self.assertEqual(source.count('analyser_actif('),1)
         self.assertEqual(source.count('construire_scenarios_depuis_contrats('),1)
+        self.assertEqual(source.count('analyser_actif('),1)
+        self.assertIn('symbole_selectionne',source)
+        self.assertIn('afficher_fiche_opportunite',source)
 
 
 if __name__=='__main__': unittest.main()

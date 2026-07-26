@@ -11,7 +11,7 @@ class Sprint35IntegrationTests(unittest.TestCase):
         for file in ("app.py","portfolio.py","pages/strategies.py"):
             source=(ROOT/file).read_text(encoding="utf-8");self.assertIn("agreger_actualites",source);self.assertIn("st.button",source)
     def test_scanner_ia_unique_et_pas_par_ligne(self):
-        source=(ROOT/"scanner.py").read_text(encoding="utf-8");self.assertEqual(source.count("analyser_actif("),1);self.assertIn("Analyser la sélection",source)
+        source=(ROOT/"scanner.py").read_text(encoding="utf-8");self.assertEqual(source.count("analyser_actif("),1);self.assertIn("Analyser cette fiche avec l’IA",source)
     def test_core_imports_interdits_absents(self):
         for path in (ROOT/"core").glob("*.py"):
             source=path.read_text(encoding="utf-8").lower()

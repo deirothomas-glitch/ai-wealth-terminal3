@@ -35,7 +35,8 @@ class ScannerCoreTests(unittest.TestCase):
         )
         self.assertEqual(set(resultat[0]), {
             "Catégorie", "Actif", "Prix", "Variation %", "RSI", "Score",
-            "Signal", "Raisons", "Ventilation",
+            "Signal", "Date données", "ATR", "Nombre points",
+            "Volume disponible", "Volatilité disponible", "Raisons", "Ventilation",
         })
         self.assertIs(type(resultat[0]["Prix"]), float)
         self.assertIs(type(resultat[0]["RSI"]), float)
@@ -245,9 +246,9 @@ class ScannerCoreTests(unittest.TestCase):
         racine = Path(__file__).resolve().parents[1]
         source = (racine / "scanner.py").read_text(encoding="utf-8")
         source_core = (racine / "scanner_core.py").read_text(encoding="utf-8")
-        self.assertIn('colonnes_masquees = ["Raisons", "Historique", "Ventilation"]', source)
+        self.assertIn('colonnes_masquees = ["Raisons", "Historique", "Ventilation", "ATR"]', source)
         self.assertIn("from core.decision import construire_decision", source)
-        self.assertIn("from ui.decision_card import afficher_decision_prudente", source)
+        self.assertIn("afficher_fiche_opportunite", source)
         self.assertEqual(source.count("construire_decision("), 1)
         self.assertNotIn("core.decision", source_core)
         self.assertNotIn("ui.decision_card", source_core)
@@ -255,8 +256,8 @@ class ScannerCoreTests(unittest.TestCase):
         self.assertNotIn("calculer_score(", source)
         self.assertNotIn("charger_donnees(", source)
         self.assertIn('st.header("🔎 Scanner IA")', source)
-        self.assertIn("🔎 Actif en tête du classement technique", source)
-        self.assertIn('metric("📈 Score moyen"', source)
+        self.assertIn("Actif à approfondir", source)
+        self.assertIn("selected_asset", source)
 
     def test_csv_schema_reste_strictement_inchange_avec_ventilation(self):
         self.assertEqual(CSV_COLUMNS, (

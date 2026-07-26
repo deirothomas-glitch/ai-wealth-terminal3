@@ -124,10 +124,10 @@ class MarketRiskIntegrationTests(unittest.TestCase):
             if isinstance(noeud, ast.Call)
             and isinstance(noeud.func, ast.Name)
         ]
-        self.assertEqual(appels_scanner.count("construire_plan_risque"), 1)
-        self.assertEqual(appels_scanner.count("construire_alertes"), 1)
+        self.assertEqual(appels_scanner.count("construire_plan_risque"), 2)
+        self.assertNotIn("construire_alertes", appels_scanner)
         self.assertNotIn("calculer_atr", appels_scanner)
-        self.assertNotIn("afficher_plan_risque", appels_scanner)
+        self.assertEqual(appels_scanner.count("afficher_plan_risque"), 1)
 
         source_portfolio = (RACINE / "portfolio.py").read_text(encoding="utf-8")
         for interdit in (
@@ -149,9 +149,9 @@ class MarketRiskIntegrationTests(unittest.TestCase):
             if isinstance(noeud, ast.Call)
             and isinstance(noeud.func, ast.Name)
         ]
-        self.assertEqual(appels_dashboard.count("calculer_atr"), 1)
-        self.assertEqual(appels_dashboard.count("construire_plan_risque"), 1)
-        self.assertEqual(appels_dashboard.count("afficher_resume_risque"), 1)
+        self.assertNotIn("calculer_atr", appels_dashboard)
+        self.assertNotIn("construire_plan_risque", appels_dashboard)
+        self.assertNotIn("afficher_resume_risque", appels_dashboard)
         self.assertNotIn("afficher_plan_risque", appels_dashboard)
 
         source_app = (RACINE / "app.py").read_text(encoding="utf-8")

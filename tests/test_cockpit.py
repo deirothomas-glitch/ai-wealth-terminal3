@@ -38,7 +38,7 @@ class CockpitTests(unittest.TestCase):
         premier = construire_cockpit(**entree); second = construire_cockpit(**entree)
         self.assertEqual(premier, second)
         self.assertEqual(entree, avant)
-        self.assertEqual(list(premier), ["bandeau", "sources", "qualite_donnees", "marche", "portefeuille", "intelligence_portefeuille", "opportunites", "alertes", "scenario_principal", "briefing", "agenda"])
+        self.assertEqual(list(premier), ["bandeau", "sources", "qualite_donnees", "marche", "portefeuille", "intelligence_portefeuille", "opportunites", "alertes", "briefing", "agenda"])
         json.dumps(premier, ensure_ascii=False, allow_nan=False)
 
     def test_bandeau_repose_uniquement_sur_disponibilites_reelles(self):
@@ -66,11 +66,9 @@ class CockpitTests(unittest.TestCase):
         self.assertEqual(portefeuille["pertes"], -5.0)
         self.assertEqual(portefeuille["exposition"], 200.0)
 
-    def test_scenario_cockpit_signale_volatilite_non_calculee(self):
+    def test_cockpit_ne_recalcule_plus_de_scenario_detaille(self):
         cockpit = construire_cockpit(**self.donnees())
-        scenario = cockpit["scenario_principal"]["scenario_haussier"]
-        self.assertIn("volatilite_globale", scenario["elements_manquants"])
-        self.assertTrue(cockpit["scenario_principal"]["donnees_partielles"])
+        self.assertNotIn("scenario_principal", cockpit)
 
     def test_portefeuille_non_charge_reste_indisponible(self):
         cockpit = construire_cockpit(positions=[], prix_portefeuille={}, journal=[])

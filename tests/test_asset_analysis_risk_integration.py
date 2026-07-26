@@ -257,9 +257,12 @@ class AssetAnalysisRiskIntegrationTests(unittest.TestCase):
             "taille_position", "ratio_risque_rendement",
         ):
             self.assertNotIn(terme, SEGMENT)
-        for fichier in ("dashboard.py", "scanner.py", "portfolio.py"):
-            source = (RACINE / fichier).read_text(encoding="utf-8")
-            self.assertNotIn("afficher_plan_risque", source)
+        source_dashboard = (RACINE / "dashboard.py").read_text(encoding="utf-8")
+        source_portfolio = (RACINE / "portfolio.py").read_text(encoding="utf-8")
+        self.assertNotIn("afficher_plan_risque", source_dashboard)
+        self.assertNotIn("afficher_plan_risque", source_portfolio)
+        source_scanner = (RACINE / "scanner.py").read_text(encoding="utf-8")
+        self.assertIn("afficher_plan_risque", source_scanner)
 
 
 if __name__ == "__main__":

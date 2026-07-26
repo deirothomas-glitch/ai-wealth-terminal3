@@ -8,6 +8,8 @@ import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
+from core.risk import calculer_atr
+
 CSV_COLUMNS = (
     "Catégorie", "Actif", "Prix", "Variation %", "RSI", "Score", "Signal",
 )
@@ -75,6 +77,32 @@ def _prix_et_variation(historique: Any) -> tuple[float, float]:
     return round(prix, 2), round(variation, 2)
 
 
+
+def _date_donnees(historique: Any) -> str:
+    try:
+        valeur = historique.index[-1]
+        if hasattr(valeur, "isoformat"):
+            return str(valeur.isoformat())
+        texte = str(valeur).strip()
+        return texte if texte else "Indisponible"
+    except Exception:
+        return "Indisponible"
+
+
+def _atr_depuis_historique(historique: Any) -> float | None:
+    try:
+        if not {"High", "Low", "Close"}.issubset(historique.columns):
+            return None
+        atr = calculer_atr(
+            [_nombre_natif(x, float) for x in historique["High"].tolist()],
+            [_nombre_natif(x, float) for x in historique["Low"].tolist()],
+            [_nombre_natif(x, float) for x in historique["Close"].tolist()],
+        )
+        return float(atr) if atr is not None else None
+    except Exception:
+        return None
+
+
 def analyser_watchlist(
     watchlist: Mapping[str, Sequence[str]],
     charger_historique: Callable[[str], Any],
@@ -102,6 +130,7 @@ def analyser_watchlist(
                 continue
             score = calculateur_score({}, historique)
             prix, variation = _prix_et_variation(historique)
+            atr = _atr_depuis_historique(historique)
             resultats.append({
                 "Catégorie": str(categorie.rstrip("s")),
                 "Actif": str(symbole),
@@ -110,6 +139,11 @@ def analyser_watchlist(
                 "RSI": float(round(_nombre_natif(score["rsi"], float), 1)),
                 "Score": int(_nombre_natif(score["score"], int)),
                 "Signal": str(score["signal"]),
+                "Date données": _date_donnees(historique),
+                "ATR": atr,
+                "Nombre points": int(len(historique)),
+                "Volume disponible": bool("Volume" in historique.columns),
+                "Volatilité disponible": bool(atr is not None),
                 "Raisons": [str(raison) for raison in score.get("raisons", [])],
                 "Ventilation": _copier_ventilation_json_native(
                     score.get("ventilation", [])

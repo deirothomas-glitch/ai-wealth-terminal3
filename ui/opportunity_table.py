@@ -14,7 +14,7 @@ def afficher_table_opportunites(st, opportunites):
             "Rang": opportunite.get("rang"),
             "Symbole": opportunite.get("symbole"),
             "Stratégie": opportunite.get("strategie"),
-            "Score global": "—" if opportunite.get("score_global") is None else opportunite.get("score_global"),
+            "Score global": "Indisponible" if opportunite.get("score_global") is None else f"{opportunite.get('score_global'):.1f} / 100",
             "Confiance": opportunite.get("confiance"),
             "Décision": opportunite.get("decision"),
             "Risque": _libelle_risque(opportunite),
@@ -28,7 +28,7 @@ def afficher_table_opportunites(st, opportunites):
     if hasattr(st, "column_config"):
         configuration = {
             "Rang": st.column_config.NumberColumn(width="small"),
-            "Score global": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.1f"),
+            "Score global": st.column_config.TextColumn(width="small"),
             "Raison principale": st.column_config.TextColumn(width="large"),
             "Vigilance": st.column_config.TextColumn(width="large"),
         }

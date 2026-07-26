@@ -3,7 +3,6 @@
 from html import escape
 import math
 
-from ui.scenario_card import afficher_scenario_principal
 from ui.portfolio_intelligence_card import afficher_intelligence_portefeuille
 
 
@@ -74,12 +73,20 @@ def afficher_cockpit(st, cockpit, analyse_ia=None):
         donnees.get("intelligence_portefeuille", {}),
         compact=True,
     )
-    afficher_scenario_principal(donnees.get("scenario_principal", {}), st)
-
-    st.subheader("🎯 Top opportunités")
+    st.subheader("🎯 Point de départ du parcours")
+    st.caption("Choisissez une opportunité déjà calculée, ou lancez le Scanner pour commencer.")
     opportunites = donnees.get("opportunites", [])
+    def ouvrir_scanner(symbole=None):
+        if not hasattr(st, "session_state"):
+            return
+        if isinstance(symbole, str) and symbole:
+            st.session_state.selected_asset = symbole
+            st.session_state.scanner_actif_selectionne = symbole
+        st.session_state.navigation = "🔎 Scanner"
+
     if not opportunites:
-        st.info("Lancez le Scanner pour alimenter le classement du Cockpit.")
+        st.info("Aucun classement n’est encore disponible dans cette session.")
+        st.button("🔎 Lancer le Scanner", key="cockpit_open_scanner", on_click=ouvrir_scanner)
     for opportunite in opportunites[:5]:
         score = "—" if opportunite.get("score") is None else f"{opportunite['score']:.1f}/100"
         st.markdown(
@@ -90,6 +97,13 @@ def afficher_cockpit(st, cockpit, analyse_ia=None):
             f'{_badge("Stratégie · " + opportunite.get("strategie", "Indisponible"))}'
             f'<div class="awt-meta">{escape(opportunite.get("resume", "Résumé indisponible"))}</div></div>',
             unsafe_allow_html=True,
+        )
+        symbole = opportunite.get("symbole", "")
+        st.button(
+            f"Approfondir {symbole}",
+            key=f"cockpit_opportunite_{symbole}",
+            on_click=ouvrir_scanner,
+            args=(symbole,),
         )
 
     st.subheader("🚨 Alertes prioritaires")
