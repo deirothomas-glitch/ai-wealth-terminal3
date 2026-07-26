@@ -8,6 +8,7 @@ from ai_analysis import analyser_actif
 from core.alerts import construire_alertes
 from core.decision import construire_decision
 from core.risk import construire_plan_risque
+from core.scenario_engine import construire_scenarios_depuis_contrats
 from core.strategy_profiles import obtenir_profils
 from market_data import charger_donnees
 from scanner_core import analyser_watchlist, generer_csv
@@ -17,6 +18,7 @@ from scoring import calculer_score
 from ui.alert_card import afficher_alertes
 from ui.decision_card import afficher_decision_prudente
 from ui.technical_summary import afficher_resume_technique
+from ui.scenario_card import afficher_scenarios
 from watchlist import charger_watchlist
 
 
@@ -147,6 +149,7 @@ def afficher_scanner():
             "accessibles."
         )
 
+    plan_risque = None
     try:
         plan_risque = construire_plan_risque(None, None, None, None)
         alertes = construire_alertes(
@@ -158,6 +161,18 @@ def afficher_scanner():
             "Les alertes d’analyse sont temporairement indisponibles. Les "
             "autres fonctions restent accessibles."
         )
+
+    if st.button("🧭 Explorer les scénarios", key="scanner_scenarios"):
+        try:
+            scenarios = construire_scenarios_depuis_contrats(
+                decision, plan_risque, horizon=profil.get("nom", "swing")
+            )
+            afficher_scenarios(scenarios)
+        except Exception:
+            st.warning(
+                "L’analyse multi-scénarios est temporairement indisponible. "
+                "Le classement et l’export restent accessibles."
+            )
 
     st.subheader("🤖 Analyse complémentaire par l’IA")
     st.caption(

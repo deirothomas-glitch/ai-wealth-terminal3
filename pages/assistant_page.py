@@ -6,12 +6,14 @@ from config import MAX_AI_MESSAGES, MAX_AI_QUESTION_LENGTH
 from core.analysis_context import construire_contexte_analyse
 from core.decision import construire_decision
 from core.risk import calculer_atr, construire_plan_risque
+from core.scenario_engine import construire_scenarios_depuis_contrats, enrichir_redaction_scenarios
 from market_data import charger_donnees, recuperer_infos
 from scoring import calculer_score
 from services.ai_market_analysis import analyser_contexte_marche
 from services.news_aggregator import agreger_actualites
 from services.news_sources import YahooNewsSource
 from ui.ai_analysis_card import afficher_analyse_ia
+from ui.scenario_card import afficher_scenarios
 from ui.assistant_chat import (
     afficher_historique_conversation,
     questions_suggerees,
@@ -100,6 +102,14 @@ def afficher_assistant():
                     limites=limites,
                 )
                 reponse = analyser_contexte_marche(contexte, question_effective)
+                scenarios = construire_scenarios_depuis_contrats(
+                    decision, risque, horizon=profil
+                )
+                scenarios = enrichir_redaction_scenarios(scenarios, {
+                    "haussier": reponse.get("scenario_favorable"),
+                    "neutre": reponse.get("resume"),
+                    "baissier": reponse.get("scenario_defavorable"),
+                })
             st.session_state.assistant_messages = (
                 st.session_state.assistant_messages
                 + [
@@ -108,6 +118,7 @@ def afficher_assistant():
                 ]
             )[-MAX_AI_MESSAGES:]
             afficher_analyse_ia(reponse)
+            afficher_scenarios(scenarios)
         except Exception:
             st.warning(
                 "La réponse IA est temporairement indisponible. Vérifiez le symbole, "

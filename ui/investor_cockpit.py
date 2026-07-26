@@ -3,6 +3,8 @@
 from html import escape
 import math
 
+from ui.scenario_card import afficher_scenario_principal
+
 
 def _nombre(valeur, suffixe=""):
     if not isinstance(valeur, (int, float)) or isinstance(valeur, bool) or not math.isfinite(valeur):
@@ -60,6 +62,8 @@ def afficher_cockpit(st, cockpit, analyse_ia=None):
             f"Gains réalisés : {_nombre(portefeuille.get('gains'), ' €')} · "
             f"Pertes réalisées : {_nombre(portefeuille.get('pertes'), ' €')}"
         )
+
+    afficher_scenario_principal(donnees.get("scenario_principal", {}), st)
 
     st.subheader("🎯 Top opportunités")
     opportunites = donnees.get("opportunites", [])

@@ -8,6 +8,7 @@ from config import APP_NAME
 from core.alerts import construire_alertes
 from core.decision import construire_decision
 from core.risk import calculer_atr, construire_plan_risque
+from core.scenario_engine import construire_scenarios_depuis_contrats
 from core.analysis_context import construire_contexte_analyse
 from dashboard import afficher_dashboard
 from pages.assistant_page import afficher_assistant
@@ -23,6 +24,7 @@ from ui.alert_card import afficher_alertes
 from ui.decision_card import afficher_decision_prudente
 from ui.risk_card import afficher_plan_risque
 from ui.technical_summary import afficher_resume_technique
+from ui.scenario_card import afficher_scenarios
 from services.news_aggregator import agreger_actualites
 from services.news_sources import YahooNewsSource
 from ui.news_card import afficher_actualites_normalisees
@@ -32,6 +34,20 @@ from ui.theme import apply_theme
 
 st.set_page_config(page_title=APP_NAME, page_icon="📈", layout="wide")
 apply_theme()
+
+
+def _afficher_scenarios_actif(decision, plan_risque):
+    """Affiche les scénarios déterministes sans fragiliser l'analyse principale."""
+    try:
+        scenarios = construire_scenarios_depuis_contrats(
+            decision, plan_risque, horizon="swing"
+        )
+        afficher_scenarios(scenarios)
+    except Exception:
+        st.warning(
+            "L’analyse multi-scénarios est temporairement indisponible. "
+            "Les autres éléments restent accessibles."
+        )
 
 
 def afficher_analyse_actif(titre, valeur_defaut):
@@ -107,6 +123,9 @@ def afficher_analyse_actif(titre, valeur_defaut):
             "Les alertes d’analyse sont temporairement indisponibles. Les "
             "autres fonctions restent accessibles."
         )
+
+    if "_afficher_scenarios_actif" in globals():
+        _afficher_scenarios_actif(decision, plan_risque)
 
     cle_news = f"actualites_{valeur_defaut}_{symbole}"
     session_disponible = hasattr(st, "session_state")

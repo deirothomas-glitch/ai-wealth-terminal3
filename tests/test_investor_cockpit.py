@@ -21,6 +21,7 @@ class Streamlit:
     def columns(self, valeur):
         nombre = valeur if isinstance(valeur, int) else len(valeur)
         return [Colonne(self.appels) for _ in range(nombre)]
+    def container(self, **kwargs): return Contexte()
     def markdown(self, *args, **kwargs): self.appels.append(("markdown", args, kwargs))
     def subheader(self, *args, **kwargs): self.appels.append(("subheader", args, kwargs))
     def caption(self, *args, **kwargs): self.appels.append(("caption", args, kwargs))
