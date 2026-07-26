@@ -1,281 +1,179 @@
-import streamlit as st
-import yfinance as yf
+"""Point d'entrée de l'AI Wealth Terminal."""
 
-from portfolio import afficher_portefeuille
-from data import get_stock_history, get_stock_info
-from indicators import moving_average, ema
-from dashboard import afficher_dashboard
-from charts import create_candlestick_chart
-from market import afficher_marche
-from scanner import afficher_scanner
-from openai import OpenAI
-import os
+import streamlit as st
+
 from ai_analysis import analyser_actif
+from charts import create_candlestick_chart
+from config import APP_NAME
+from core.alerts import construire_alertes
+from core.decision import construire_decision
+from core.risk import calculer_atr, construire_plan_risque
+from core.analysis_context import construire_contexte_analyse
+from dashboard import afficher_dashboard
+from pages.assistant_page import afficher_assistant
+from pages.news_page import afficher_page_actualites
+from indicators import rsi
+from market import afficher_marche
+from market_data import charger_donnees, dernier_prix, recuperer_infos
+from portfolio import afficher_portefeuille
+from pages.strategies import afficher_strategies
+from scanner import afficher_scanner
 from scoring import calculer_score
+from ui.alert_card import afficher_alertes
+from ui.decision_card import afficher_decision_prudente
+from ui.risk_card import afficher_plan_risque
+from ui.technical_summary import afficher_resume_technique
+from services.news_aggregator import agreger_actualites
+from services.news_sources import YahooNewsSource
+from ui.news_card import afficher_actualites_normalisees
+from ui.news_sentiment_card import afficher_sentiment_actualites
 from ui.theme import apply_theme
 
 
-
-client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-# =====================================================
-# CONFIGURATION
-# =====================================================
-
-st.set_page_config(
-    page_title="AI Wealth Terminal",
-    page_icon="📈",
-    layout="wide"
-)
-
+st.set_page_config(page_title=APP_NAME, page_icon="📈", layout="wide")
 apply_theme()
 
-# =====================================================
-# SIDEBAR
-# =====================================================
+
+def afficher_analyse_actif(titre, valeur_defaut):
+    st.header(titre)
+    symbole = st.text_input("Symbole", valeur_defaut,
+                            key=f"analyse_{valeur_defaut}").upper().strip()
+    historique = charger_donnees(symbole, "1y")
+    if historique is None:
+        st.warning("Aucune donnée disponible pour ce symbole.")
+        return
+    info = recuperer_infos(symbole)
+    resultat_score = calculer_score(info, historique)
+    col1, col2 = st.columns(2)
+    col1.metric("Actif", info.get("longName", symbole))
+    col2.metric("Cours actuel", f"{dernier_prix(historique):.2f}")
+    st.plotly_chart(create_candlestick_chart(historique, info.get(
+        "longName", symbole)), use_container_width=True)
+    afficher_resume_technique(resultat_score)
+    st.caption(
+        "Le signal technique résume les indicateurs. La recommandation "
+        "prudente tient compte de la couverture et de la cohérence des "
+        "preuves disponibles."
+    )
+    decision = None
+    try:
+        decision = construire_decision(resultat_score)
+        afficher_decision_prudente(decision)
+        if (resultat_score["signal"] == "VENTE"
+                and decision["recommandation"] == "Éviter"):
+            st.info(
+                "« Éviter » signifie ne pas initier une position sur la base "
+                "des données actuelles. Cela ne suppose pas que vous détenez "
+                "l’actif."
+            )
+    except Exception:
+        st.warning(
+            "La recommandation prudente est indisponible. Le score et le "
+            "signal techniques restent consultables."
+        )
+
+    plan_risque = None
+    try:
+        colonnes_atr = {"High", "Low", "Close"}
+        if colonnes_atr.issubset(historique.columns):
+            atr_actuel = calculer_atr(
+                [float(valeur) for valeur in historique["High"].tolist()],
+                [float(valeur) for valeur in historique["Low"].tolist()],
+                [float(valeur) for valeur in historique["Close"].tolist()],
+            )
+            prix_entree_risque = float(historique["Close"].iloc[-1])
+        else:
+            atr_actuel = None
+            prix_entree_risque = None
+        plan_risque = construire_plan_risque(
+            prix_entree=prix_entree_risque,
+            atr=atr_actuel,
+            capital_reference=None,
+            risque_max_pct=None,
+        )
+        afficher_plan_risque(plan_risque)
+    except Exception:
+        st.warning(
+            "Le plan de risque est temporairement indisponible. L’analyse "
+            "technique et la décision prudente restent accessibles."
+        )
+
+
+    try:
+        alertes = construire_alertes(resultat_score, decision, plan_risque)
+        afficher_alertes(alertes)
+    except Exception:
+        st.warning(
+            "Les alertes d’analyse sont temporairement indisponibles. Les "
+            "autres fonctions restent accessibles."
+        )
+
+    cle_news = f"actualites_{valeur_defaut}_{symbole}"
+    session_disponible = hasattr(st, "session_state")
+    if session_disponible and st.button(
+        "📰 Actualiser les actualités", key=f"news_{valeur_defaut}"
+    ):
+        st.session_state[cle_news], erreurs_news = agreger_actualites(
+            [YahooNewsSource()], symbole, info.get("longName", symbole), limite=5
+        )
+        for erreur_news in erreurs_news:
+            st.warning(erreur_news)
+    actualites_actif = st.session_state.get(cle_news, []) if session_disponible else []
+    if actualites_actif:
+        st.subheader("📰 Actualités pertinentes")
+        afficher_sentiment_actualites(actualites_actif[0].get("sentiment", {}))
+        afficher_actualites_normalisees(actualites_actif, limite=5)
+
+    st.subheader("🤖 Analyse complémentaire par l’IA")
+    st.caption(
+        "L’analyse IA apporte un commentaire complémentaire. Elle ne remplace "
+        "pas la recommandation déterministe ni votre décision."
+    )
+    if st.button("🤖 Analyser avec GPT", key=f"ia_{valeur_defaut}"):
+        rsi_actuel = float(
+            rsi(historique).iloc[-1]) if len(historique) >= 14 else 50.0
+        with st.spinner("Analyse IA en cours..."):
+            analyse_kwargs = {}
+            if session_disponible:
+                contexte_ia = construire_contexte_analyse(
+                    actif={"nom": info.get("longName", symbole), "symbole": symbole,
+                           "prix": dernier_prix(historique)},
+                    technique=resultat_score, decision=decision, risque=plan_risque,
+                    actualites=actualites_actif,
+                    sentiment_actualites=(actualites_actif[0].get("sentiment", {})
+                                           if actualites_actif else {}),
+                    limites=["Données de marché potentiellement différées."],
+                )
+                analyse_kwargs["contexte"] = contexte_ia
+            st.markdown(analyser_actif(
+                info.get("longName", symbole), symbole, dernier_prix(historique),
+                resultat_score["score"], rsi_actuel, resultat_score["signal"],
+                **analyse_kwargs,
+            ))
+
 
 st.sidebar.title("Navigation")
-
-menu = st.sidebar.radio(
-    "Choisissez une section",
-    [
-        "🏠 Accueil",
-        "📈 Marchés",
-        "📊 Actions",
-        "₿ Cryptomonnaies",
-        "💼 Portefeuille",
-        "🤖 Assistant IA",
-        "🔎 Scanner"
-
-    ]
-)
-
-
-# =====================================================
-# ACCUEIL
-# =====================================================
+menu = st.sidebar.radio("Choisissez une section", [
+    "🏠 Accueil", "📈 Marchés", "📊 Actions", "₿ Cryptomonnaies",
+    "💼 Portefeuille", "🔎 Scanner", "🧭 Stratégies", "📰 Actualités",
+    "🤖 Assistant IA",
+])
 
 if menu == "🏠 Accueil":
     afficher_dashboard()
-
-# =====================================================
-# MARCHÉS
-# =====================================================
-
 elif menu == "📈 Marchés":
     afficher_marche()
-# =====================================================
-# ACTIONS
-# =====================================================
-
 elif menu == "📊 Actions":
-
-    st.header("📊 Analyse d'une action")
-
-    symbole = st.text_input(
-        "Symbole de l'action",
-        value="MSFT"
-    )
-
-    info = get_stock_info(symbole)
-    historique = get_stock_history(symbole)
-
-    resultat = calculer_score(info, historique)
-
-    st.write("historique:", historique)
-    if historique is not None:
-        st.write("Nombre de lignes : ", len(historique))
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.metric(
-            "Entreprise",
-            info.get("longName", "Inconnue")
-        )
-
-        st.metric(
-            "Cours actuel",
-            info.get("currentPrice", "N/A")
-        )
-
-        st.metric(
-            "Capitalisation",
-            info.get("marketCap", "N/A")
-        )
-
-    with col2:
-        st.metric(
-            "Secteur",
-            info.get("sector", "N/A")
-        )
-
-        st.metric(
-                "Industrie",
-                info.get("industry", "N/A")
-            )
-
-        st.metric(
-                "Pays",
-                info.get("country", "N/A")
-            )
-
-        st.subheader("📈 Graphique du cours")
-
-        if historique is not None and not historique.empty:
-            fig = create_candlestick_chart(
-                historique,
-                info.get("longName", symbole)
-            )
-            st.plotly_chart(fig, key="graph_action")
-            st.subheader("🤖 Score IA")
-
-            col1, col2 = st.columns(2)
-
-            with col1:
-                st.metric("Score IA", f"{resultat['score']}/100")
-
-            with col2:
-                st.metric("Signal", resultat["signal"])
-
-            st.subheader("📈 Indicateurs techniques")
-
-            close = historique["Close"]
-
-            ma20 = close.rolling(20).mean()
-            ema20 = close.ewm(span=20).mean()
-
-            st.metric("📊 Dernier cours", f"{close.iloc[-1]:.2f} $")
-            st.metric("📈 Moyenne mobile 20", f"{ma20.iloc[-1]:.2f} $")
-            st.metric("⚡ EMA 20", f"{ema20.iloc[-1]:.2f} $")
-        
-        else:
-            st.warning("Aucune donnée historique disponible.")
-
-        st.divider()
-
-# =====================================================
-# CRYPTOMONNAIES
-# =====================================================
-
+    afficher_analyse_actif("📊 Analyse d'une action", "AAPL")
 elif menu == "₿ Cryptomonnaies":
-
-    st.header("₿ Marché des cryptomonnaies")
-
-    crypto = st.selectbox(
-        "Choisissez une cryptomonnaie",
-        [
-            "BTC-USD",
-            "ETH-USD",
-            "SOL-USD",
-            "BNB-USD",
-            "XRP-USD"
-        ]
-    )
-
-    historique = get_stock_history(crypto)
-
-    if historique.empty:
-        st.error("Impossible de récupérer les données.")
-    else:
-        fig = create_candlestick_chart(
-            historique,
-            crypto
-        )
-        st.plotly_chart(
-            fig,
-            use_container_width=True,
-            key="graph_crypto",
-        )  
-
-
-# =====================================================
-# ASSISTANT IA
-# =====================================================
-
-elif menu == "🤖 Assistant IA":
-
-    st.header("🤖 Assistant IA")
-
-    symbole = st.text_input(
-        "Symbole à analyser",
-        value="AAPL"
-    )
-
-    if st.button("Lancer l'analyse"):
-
-        try:
-
-            info = get_stock_info(symbole)
-
-            prix = info.get(
-                "currentPrice",
-                "N/A"
-            )
-            historique = get_stock_history(symbole)
-            st.subheader("📈 Graphique")
-
-            if historique is not None and not historique.empty:
-                fig = create_candlestick_chart(
-                    historique,
-                    info.get("longName", symbole)
-                )
-
-            st.divider()
-            with st.spinner(
-                "Analyse en cours..."
-            ):
-
-                resultat = analyser_actif(
-                    nom = info.get("longName", symbole),
-                    symbole = symbole,
-                    prix = prix,
-                    score = 80,
-                    rsi ="N/A",
-                    tendance = "Neutre"
-                )
-
-            st.success("Analyse terminée")
-
-            st.success("✅ Analyse terminée")
-
-            st.progress(82)
-
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.metric("🎯 Score IA", "82/100")
-
-            with col2:
-                st.metric("📈 Tendance", "Haussière")
-
-            with col3:
-                st.metric("💡 Recommandation", "Acheter")
-
-            st.divider()
-
-            st.markdown(resultat)
-
-            st.divider()
-
-            st.subheader("📊 Résumé")
-
-            st.info("""
-            • 📈 Potentiel estimé : +8 %
-
-            • ⚠️ Risque : Moyen
-
-            • 🤖 Confiance IA : 91 %
-
-            • ⏳ Horizon : Moyen terme
-            """)
-
-        except Exception as e:
-
-            st.error(str(e))
-            
+    afficher_analyse_actif("₿ Analyse d'une cryptomonnaie", "BTC-USD")
 elif menu == "💼 Portefeuille":
-
     afficher_portefeuille()
-    
 elif menu == "🔎 Scanner":
     afficher_scanner()
+elif menu == "🧭 Stratégies":
+    afficher_strategies()
+elif menu == "📰 Actualités":
+    afficher_page_actualites()
+elif menu == "🤖 Assistant IA":
+    afficher_assistant()

@@ -1,414 +1,163 @@
-import streamlit as st
-import yfinance as yf
+"""Scanner de la watchlist, déclenché manuellement pour limiter les appels marché."""
+
 import pandas as pd
+import streamlit as st
+
 from ai_analysis import analyser_actif
-
-# ==========================================
-# Watchlist
-# ==========================================
-
-WATCHLIST = {
-    "Apple": "AAPL",
-    "Microsoft": "MSFT",
-    "Nvidia": "NVDA",
-    "Amazon": "AMZN",
-    "Meta": "META",
-    "Google": "GOOGL",
-    "Tesla": "TSLA",
-    "Netflix": "NFLX",
-    "AMD": "AMD",
-    "Bitcoin": "BTC-USD",
-    "Ethereum": "ETH-USD",
-    "Solana": "SOL-USD"
-}
+from core.alerts import construire_alertes
+from core.decision import construire_decision
+from core.risk import construire_plan_risque
+from core.strategy_profiles import obtenir_profils
+from market_data import charger_donnees
+from scanner_core import analyser_watchlist, generer_csv
+from services.scanner_opportunities import classer_resultats_scanner
+from ui.opportunity_table import afficher_table_opportunites
+from scoring import calculer_score
+from ui.alert_card import afficher_alertes
+from ui.decision_card import afficher_decision_prudente
+from ui.technical_summary import afficher_resume_technique
+from watchlist import charger_watchlist
 
 
-# ==========================================
-# Récupération des données
-# ==========================================
-
-def charger_donnees(symbole, periode="6mo"):
-
-    try:
-        df = yf.Ticker(symbole).history(period=periode)
-
-        if df.empty:
-            return None
-
-        df = df.dropna()
-
-        return df
-
-    except Exception as e:
-        st.write(f"Erreur pour {symbole} :", e)
-        return None
-
-# ==========================================
-# EMA
-# ==========================================
-
-def ajouter_ema(df):
-
-    df["EMA20"] = df["Close"].ewm(span=20).mean()
-
-    df["EMA50"] = df["Close"].ewm(span=50).mean()
-
-    df["EMA200"] = df["Close"].ewm(span=200).mean()
-
-    return df
-
-
-# ==========================================
-# RSI
-# ==========================================
-
-def calcul_rsi(df, periode=14):
-
-    delta = df["Close"].diff()
-
-    gain = delta.where(delta > 0, 0)
-
-    perte = -delta.where(delta < 0, 0)
-
-    gain = gain.rolling(periode).mean()
-
-    perte = perte.rolling(periode).mean()
-
-    rs = gain / perte
-
-    df["RSI"] = 100 - (100 / (1 + rs))
-
-    return df
-# ==========================================
-# MACD
-# ==========================================
-
-def ajouter_macd(df):
-
-    ema12 = df["Close"].ewm(span=12, adjust=False).mean()
-
-    ema26 = df["Close"].ewm(span=26, adjust=False).mean()
-
-    df["MACD"] = ema12 - ema26
-
-    df["MACD_SIGNAL"] = (
-        df["MACD"]
-        .ewm(span=9, adjust=False)
-        .mean()
+def scanner_marche(progress_callback=None, error_callback=None):
+    """Orchestre les dépendances du moteur et retourne un DataFrame."""
+    resultats = analyser_watchlist(
+        charger_watchlist(),
+        charger_donnees,
+        calculer_score,
+        progress_callback=progress_callback,
+        error_callback=error_callback,
     )
-
-    df["MACD_HIST"] = (
-        df["MACD"] - df["MACD_SIGNAL"]
-    )
-
-    return df
+    return pd.DataFrame(resultats)
 
 
-# ==========================================
-# Score Technique
-# ==========================================
-
-def calcul_score(df):
-
-    if df is None or len(df) < 60:
-        return None
-
-    df = ajouter_ema(df)
-
-    df = calcul_rsi(df)
-
-    df = ajouter_macd(df)
-
-    prix = float(df["Close"].iloc[-1])
-
-    ema20 = float(df["EMA20"].iloc[-1])
-
-    ema50 = float(df["EMA50"].iloc[-1])
-
-    ema200 = float(df["EMA200"].iloc[-1])
-
-    rsi = float(df["RSI"].iloc[-1])
-
-    macd = float(df["MACD"].iloc[-1])
-
-    signal = float(df["MACD_SIGNAL"].iloc[-1])
-
-    score = 50
-
-    # EMA
-    if prix > ema20:
-        score += 10
-
-    if prix > ema50:
-        score += 10
-
-    if prix > ema200:
-        score += 15
-
-    # RSI
-    if 45 <= rsi <= 65:
-        score += 10
-    elif rsi < 30:
-        score += 15
-    elif rsi > 70:
-        score -= 10
-
-    # MACD
-    if macd > signal:
-        score += 15
-
-    return max(0, min(score, 100))
-
-
-# ==========================================
-# Tendance
-# ==========================================
-
-def determiner_tendance(score):
-
-    if score >= 80:
-        return "🟢 Très haussière"
-
-    elif score >= 65:
-        return "🟢 Haussière"
-
-    elif score >= 50:
-        return "🟡 Neutre"
-
-    elif score >= 35:
-        return "🟠 Baissière"
-
-    return "🔴 Très baissière"
-
-# ==========================================
-# Scanner
-# ==========================================
-
-def scanner_marche():
-
-    resultat = []
-
-    total = len(WATCHLIST)
-
-    barre = st.progress(0)
-
-    for i, (nom, symbole) in enumerate(WATCHLIST.items()):
-
-        df = charger_donnees(symbole)
-
-        barre.progress((i + 1) / total)
-
-        if df is None:
-            continue
-
-        score = calcul_score(df)
-
-        if score is None:
-            continue
-
-        prix = round(float(df["Close"].iloc[-1]), 2)
-
-        variation = round(
-            (
-                (df["Close"].iloc[-1] - df["Close"].iloc[-2])
-                / df["Close"].iloc[-2]
-            ) * 100,
-            2
-        )
-
-        rsi = round(float(df["RSI"].iloc[-1]), 1)
-
-        resultat.append(
-            {
-                "Actif": nom,
-                "Symbole": symbole,
-                "Prix": prix,
-                "Variation %": variation,
-                "RSI": rsi,
-                "Score": score,
-                "Tendance": determiner_tendance(score)
-            }
-        )
-
-    barre.empty()
-
-    if len(resultat) == 0:
-        return pd.DataFrame()
-
-    df_resultat = pd.DataFrame(resultat)
-
-    df_resultat = df_resultat.sort_values(
-        by="Score",
-        ascending=False
-    )
-
-    return df_resultat
-
-
-# ==========================================
-# Interface Scanner
-# ==========================================
-if "resultat_scanner" not in st.session_state:
-    st.session_state.resultat_scanner = None
 def afficher_scanner():
-
     st.header("🔎 Scanner IA")
+    profils = obtenir_profils()
+    profil = st.selectbox("Profil de stratégie", profils, format_func=lambda p: p["nom"], key="scanner_profil")
+    if st.button("🚀 Lancer le scanner", use_container_width=True):
+        progression = st.progress(0)
+        erreurs = []
 
-    st.write(
-        "Analyse automatique de la watchlist "
-        "avec score technique."
-    )
+        def mettre_a_jour_progression(traites, total):
+            progression.progress(traites / max(total, 1))
 
-    if st.button("🚀 Scanner les marchés"):
+        def noter_erreur(categorie, symbole):
+            erreurs.append((categorie, symbole))
 
-        with st.spinner("Analyse en cours..."):
-            try:
-                st.session_state.resultat_scanner = scanner_marche()
-
-            except Exception as e:
-                st.error(f"ERREUR : {e}")
-                st.stop()
-
-    resultat = st.session_state.resultat_scanner
-
+        with st.spinner("Analyse de la watchlist..."):
+            st.session_state.scanner_resultats = scanner_marche(
+                progress_callback=mettre_a_jour_progression,
+                error_callback=noter_erreur,
+            )
+        progression.empty()
+        st.session_state.scanner_nombre_erreurs = len(erreurs)
+        st.session_state.scanner_opportunites = classer_resultats_scanner(st.session_state.scanner_resultats.to_dict(orient="records"), profil)
+        st.session_state.opportunites_classees = st.session_state.scanner_opportunites
+    resultat = st.session_state.get("scanner_resultats")
     if resultat is None:
+        st.info("Cliquez sur « Lancer le scanner ».")
+        return
+    nombre_erreurs = st.session_state.get("scanner_nombre_erreurs", 0)
+    if nombre_erreurs:
+        st.warning(f"{nombre_erreurs} actif(s) n'ont pas pu être analysé(s).")
+    if resultat.empty:
+        st.warning("Aucun actif n'a pu être analysé.")
         return
 
-    if resultat.empty:
+    opportunites = st.session_state.get("scanner_opportunites", [])
+    if opportunites:
+        c1, c2, c3, c4 = st.columns(4)
+        confiance = c1.selectbox("Niveau de confiance", ["Toutes", "elevee", "moderee", "faible"], key="filtre_confiance")
+        qualite = c2.selectbox("Qualité", ["Toutes", "bon", "partiel", "insuffisant"], key="filtre_qualite")
+        decision_filtre = c3.selectbox("Recommandation prudente", ["Toutes"] + sorted({x["decision"] for x in opportunites}), key="filtre_decision")
+        maximum = c4.number_input("Résultats maximum", min_value=1, max_value=100, value=min(20, len(opportunites)))
+        classement = [x for x in opportunites if (confiance == "Toutes" or x["confiance"] == confiance) and (qualite == "Toutes" or x["qualite_donnees"] == qualite) and (decision_filtre == "Toutes" or x["decision"] == decision_filtre)][:int(maximum)]
+        st.subheader("Classement des opportunités")
+        afficher_table_opportunites(st, classement)
+    col1, col2 = st.columns(2)
+    minimum = col1.slider("Score minimum", 0, 100, 60, 5)
+    recherche = col2.text_input("Recherche").upper().strip()
+    filtre = resultat[resultat["Score"] >= minimum]
+    if recherche:
+        filtre = filtre[filtre["Actif"].str.contains(
+            recherche, case=False, na=False)]
+    if filtre.empty:
+        st.info("Aucun actif ne correspond à ces filtres.")
+        return
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("📊 Actifs", len(filtre))
+    col2.metric("📈 Score moyen", round(filtre["Score"].mean(), 1))
+    meilleur = filtre.iloc[0]
+    col3.metric("🥇 Meilleur", meilleur["Actif"])
+    col4.metric("⭐ Score", meilleur["Score"])
 
-            st.error(
-                "Aucun actif n'a pu être analysé."
-            )
-
-            return
-
-    st.success(
-            f"{len(resultat)} actifs analysés."
-        )
-
+    colonnes_masquees = ["Raisons", "Historique", "Ventilation"]
     st.dataframe(
-            resultat,
-            use_container_width=True,
-            hide_index=True
-        )
-    st.divider()
-
-    st.subheader("🤖 Analyse IA")
-
-    actif = st.selectbox(
-            "Choisir un actif",
-            resultat["Actif"]
-        )
-
-    if st.button("Analyser avec l'IA"):
-
-            ligne = resultat[resultat["Actif"] == actif].iloc[0]
-
-            with st.spinner("Analyse par l'IA..."):
-                try:
-                    st.write("Avant analyser_actif")
-
-                    analyse = analyser_actif(
-                        nom=ligne["Actif"],
-                        symbole=ligne["Symbole"],
-                        prix=ligne["Prix"],
-                        score=ligne["Score"],
-                        rsi=ligne["RSI"],
-                        tendance=ligne["Tendance"]
-                    )
-                    
-                    st.write("Après analyser_actif")
-                    st.success("Réponse reçue")
-
-                except Exception as e:
-                    st.error(str(e))
-            st.markdown(analyse)
-
-    top = resultat.iloc[0]
-
-    st.subheader("🏆 Meilleure opportunité")
-
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(
-            "Actif",
-            top["Actif"]
-        )
-
-    c2.metric(
-            "Score",
-            f"{top['Score']}/100"
-        )
-
-    c3.metric(
-            "Tendance",
-            top["Tendance"]
-        )
-# ==========================================
-# Filtres et export
-# ==========================================
-
-    st.divider()
-
-    st.subheader("🎯 Filtrer les résultats")
-
-    score_min = st.slider(
-            "Score minimum",
-            min_value=0,
-            max_value=100,
-            value=60,
-            step=5
-        )
-
-    resultat_filtre = resultat[
-            resultat["Score"] >= score_min
-        ]
-
-    st.dataframe(
-            resultat_filtre,
-            use_container_width=True,
-            hide_index=True
-        )
-
-    csv = resultat_filtre.to_csv(index=False).encode("utf-8")
-
-    st.download_button(
-            label="📥 Exporter en CSV",
-            data=csv,
-            file_name="scanner_ai_wealth_terminal.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-
-    st.divider()
-
-    st.subheader("📈 Résumé")
-
-    moyenne = resultat["Score"].mean()
-
-    if moyenne >= 75:
-            st.success(
-                "Le marché présente actuellement un contexte technique globalement haussier."
-            )
-
-    elif moyenne >= 60:
-            st.info(
-                "Le marché est plutôt positif mais certaines opportunités demandent confirmation."
-            )
-
-    elif moyenne >= 45:
-            st.warning(
-                "Le marché est neutre. Il est conseillé d'attendre des signaux plus forts."
-            )
-
-    else:
-            st.error(
-                "Le marché est actuellement fragile. Une gestion prudente du risque est recommandée."
-            )
-
-    st.progress(moyenne / 100)
-
+        filtre.drop(columns=[
+            colonne for colonne in colonnes_masquees if colonne in filtre.columns
+        ]),
+        use_container_width=True,
+    )
+    meilleur = filtre.iloc[0]
+    resultat_score_selectionne = {
+        "score": int(meilleur["Score"]),
+        "signal": str(meilleur["Signal"]),
+        "raisons": list(meilleur["Raisons"]),
+        "ventilation": list(meilleur["Ventilation"]),
+    }
+    st.subheader(
+        f"🔎 Actif en tête du classement technique : {meilleur['Actif']}"
+    )
+    afficher_resume_technique(resultat_score_selectionne)
     st.caption(
-            "⚠️ Les scores sont calculés à partir d'indicateurs techniques (EMA, RSI et MACD). "
-            "Ils ne constituent pas un conseil en investissement."
+        "Le signal technique résume les indicateurs. La recommandation "
+        "prudente tient compte de la couverture et de la cohérence des "
+        "preuves disponibles."
+    )
+    decision = None
+    try:
+        decision = construire_decision(resultat_score_selectionne)
+        afficher_decision_prudente(decision)
+        if (resultat_score_selectionne["signal"] == "VENTE"
+                and decision["recommandation"] == "Éviter"):
+            st.info(
+                "« Éviter » signifie ne pas initier une position sur la base "
+                "des données actuelles. Cela ne suppose pas que vous détenez "
+                "l’actif."
+            )
+    except Exception:
+        st.warning(
+            "La recommandation prudente est temporairement indisponible. Le "
+            "classement technique, l’analyse IA et l’export restent "
+            "accessibles."
         )
+
+    try:
+        plan_risque = construire_plan_risque(None, None, None, None)
+        alertes = construire_alertes(
+            resultat_score_selectionne, decision, plan_risque
+        )
+        afficher_alertes(alertes)
+    except Exception:
+        st.warning(
+            "Les alertes d’analyse sont temporairement indisponibles. Les "
+            "autres fonctions restent accessibles."
+        )
+
+    st.subheader("🤖 Analyse complémentaire par l’IA")
+    st.caption(
+        "L’analyse IA apporte un commentaire complémentaire. Elle ne remplace "
+        "pas la recommandation déterministe ni votre décision."
+    )
+    if st.button("🤖 Analyser la sélection", key="scanner_ia"):
+        with st.spinner("Analyse IA en cours..."):
+            st.markdown(analyser_actif(
+                meilleur["Actif"], meilleur["Actif"], meilleur["Prix"],
+                meilleur["Score"], meilleur["RSI"], meilleur["Signal"],
+            ))
+    csv = generer_csv(filtre.to_dict(orient="records"))
+    st.download_button(
+        "📥 Télécharger les résultats (CSV)", csv,
+        "scanner_ai_wealth_terminal.csv", "text/csv",
+    )

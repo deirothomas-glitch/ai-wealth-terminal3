@@ -1,131 +1,30 @@
+"""Façade historique de l'analyse IA structurée et validée."""
+import os
 import streamlit as st
-from openai import OpenAI
+from core.analysis_context import construire_contexte_analyse
 from news import recuperer_actualites
+from services.ai_market_analysis import analyser_contexte_marche
 
-# ==========================================
-# Client OpenAI
-# ==========================================
+def _api_key():
+    try:key=st.secrets.get("OPENAI_API_KEY")
+    except Exception:key=None
+    return key or os.getenv("OPENAI_API_KEY")
 
-def get_client():
+def _markdown(analyse):
+    sections=[]
+    for titre,cle in (("Résumé","resume"),("Contexte de marché","contexte_marche"),("Lecture technique","lecture_technique"),("Lecture des actualités","lecture_actualites"),("Scénario favorable","scenario_favorable"),("Scénario défavorable","scenario_defavorable")):
+        value=analyse.get(cle)
+        if value:sections.append(f"### {titre}\n{value}")
+    for titre,cle in (("Risques principaux","risques_principaux"),("Points à surveiller","points_a_surveiller"),("Limites","limites")):
+        values=analyse.get(cle,[])
+        if values:sections.append(f"### {titre}\n"+"\n".join(f"- {x}" for x in values))
+    sections.append("*La décision finale appartient à l’utilisateur.*")
+    return "\n\n".join(sections)
 
-    api_key = st.secrets.get("OPENAI_API_KEY")
-    st.write("Clé trouvée :", api_key is not None)
-    st.write("Longueur :", len(api_key) if api_key else 0)
-
-    if not api_key:
-        st.error("Clé API OpenAI introuvable.")
-        return None
-
-    return OpenAI(api_key=api_key)
-
-
-# ==========================================
-# Analyse IA
-# ==========================================
-
-def analyser_actif(
-    nom,
-    symbole,
-    prix,
-    score,
-    rsi,
-    tendance
-):
-
-    client = get_client()
-
-    if client is None:
-        return "❌ Clé API OpenAI introuvable."
-    
-    actualites = recuperer_actualites(symbole)
-
-    texte_actualites = ""
-
-    for article in actualites:
-        texte_actualites += (
-            f"- {article['titre']} "
-            f"({article['source']})\n"
-        )
-
-    prompt = f"""
-Tu es un analyste financier professionnel.
-
-Dernières actualités :
-
-{texte_actualites}
-
-Tiens compte de ces actualités dans ton analyse.
-Explique leur impact potentiel sur le cours.
-
-Analyse cet actif :
-
-Nom : {nom}
-Symbole : {symbole}
-
-Prix : {prix}
-
-Score technique : {score}/100
-
-RSI : {rsi}
-
-Tendance : {tendance}
-
-Explique :
-
-1. Les points forts.
-2. Les risques.
-3. Le contexte actuel.
-
-Puis ajoute une section appelée :
-
-===== SIGNAL IA =====
-
-Décision :
-- ACHAT FORT
-- ACHAT
-- SURVEILLER
-- CONSERVER
-- VENTE
-- VENTE FORTE
-
-Confiance : xx %
-
-Horizon conseillé :
-- Court terme
-- Moyen terme
-- Long terme
-
-Prix d'entrée idéal (si pertinent)
-
-Objectif 1
-
-Objectif 2
-
-Stop-loss conseillé
-
-Ratio risque/rendement
-
-Catalyseurs à surveiller
-
-Conclusion finale en une phrase.
-
-Réponds en français avec une mise en forme claire en Markdown.
-
-    """
-
-    try:
-        reponse = client.chat.completions.create(
-            model="gpt-5",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-        )
-    
-        return reponse.choices[0].message.content
-    
-    except Exception as e:
-        st.error(f"Erreur lors de l'analyse par l'IA : {e}")
-        return None
+def analyser_actif(nom,symbole,prix,score,rsi,tendance,contexte=None,question=None):
+    cle=_api_key()
+    if not cle:return "⚠️ Configurez `OPENAI_API_KEY` dans `.streamlit/secrets.toml` ou dans les variables d'environnement."
+    if not isinstance(contexte,dict):
+        actualites=recuperer_actualites(symbole)
+        contexte=construire_contexte_analyse(actif={"nom":nom,"symbole":symbole,"prix":prix},technique={"score":score,"rsi":rsi,"signal":tendance},actualites=actualites,sentiment_actualites=actualites[0].get("sentiment",{}) if actualites else {},limites=["Contexte limité fourni par l’interface historique."])
+    return _markdown(analyser_contexte_marche(contexte,question,api_key=cle))

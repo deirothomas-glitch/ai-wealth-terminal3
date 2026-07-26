@@ -1,8 +1,11 @@
-import yfinance as yf
+"""Compatibilité avec les anciennes pages de l'application."""
+
+from market_data import charger_donnees, recuperer_infos
+
+
 def get_stock_history(symbol, period="1mo"):
-    ticker = yf.Ticker(symbol)
-    return ticker.history(period=period)    
+    return charger_donnees(symbol, period)
+
 
 def get_stock_info(symbol):
-    ticker = yf.Ticker(symbol)
-    return ticker.info 
+    return recuperer_infos(symbol)

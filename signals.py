@@ -1,73 +1,37 @@
-def generer_signal(score_data):
-    """
-    Génère un plan de trade à partir du score IA.
-    """
+"""Référentiel canonique des signaux et génération d'un plan de trade."""
 
+SEUIL_ACHAT = 75
+SEUIL_SURVEILLER = 50
+SIGNAL_ACHAT = "ACHAT"
+SIGNAL_SURVEILLER = "SURVEILLER"
+SIGNAL_VENTE = "VENTE"
+SIGNAL_DONNEES_INSUFFISANTES = "DONNÉES INSUFFISANTES"
+
+
+def determiner_signal(score):
+    """Retourne le libellé canonique correspondant à un score sur 100."""
+    if score >= SEUIL_ACHAT:
+        return SIGNAL_ACHAT
+    if score >= SEUIL_SURVEILLER:
+        return SIGNAL_SURVEILLER
+    return SIGNAL_VENTE
+
+
+def generer_signal(score_data):
+    """Génère un plan de trade selon le référentiel canonique."""
     score = score_data["score"]
     prix = score_data["prix"]
-
-    if score >= 85:
-
-        signal = "🟢 ACHAT FORT"
-        confiance = 90
-
-        entree = prix
-        stop_loss = prix * 0.98
-        objectif1 = prix * 1.03
-        objectif2 = prix * 1.06
-
-    elif score >= 70:
-
-        signal = "🟢 ACHAT"
-        confiance = 80
-
-        entree = prix
-        stop_loss = prix * 0.97
-        objectif1 = prix * 1.04
-        objectif2 = prix * 1.08
-
-    elif score >= 55:
-
-        signal = "🟡 SURVEILLANCE"
-        confiance = 60
-
-        entree = prix
-        stop_loss = prix * 0.95
-        objectif1 = prix * 1.03
-        objectif2 = prix * 1.05
-
+    signal = determiner_signal(score)
+    if signal == SIGNAL_ACHAT:
+        confiance, stop, objectif1, objectif2 = 90, prix * 0.98, prix * 1.03, prix * 1.06
+    elif signal == SIGNAL_SURVEILLER:
+        confiance, stop, objectif1, objectif2 = 60, prix * 0.95, prix * 1.03, prix * 1.05
     else:
-
-        signal = "🔴 ATTENDRE"
-        confiance = 35
-
-        entree = prix
-        stop_loss = prix * 0.94
-        objectif1 = prix
-        objectif2 = prix
-
-    risque = entree - stop_loss
-    gain = objectif1 - entree
-
-    if risque > 0:
-        ratio = gain / risque
-    else:
-        ratio = 0
-
+        confiance, stop, objectif1, objectif2 = 35, prix * 0.94, prix, prix
+    risque = prix - stop
+    ratio = (objectif1 - prix) / risque if risque > 0 else 0
     return {
-
-        "signal": signal,
-
-        "confiance": confiance,
-
-        "entree": round(entree, 2),
-
-        "stop_loss": round(stop_loss, 2),
-
-        "objectif1": round(objectif1, 2),
-
-        "objectif2": round(objectif2, 2),
-
-        "ratio": round(ratio, 2)
-
+        "signal": signal, "confiance": confiance, "entree": round(prix, 2),
+        "stop_loss": round(stop, 2), "objectif1": round(objectif1, 2),
+        "objectif2": round(objectif2, 2), "ratio": round(ratio, 2),
     }

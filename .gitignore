@@ -1,1 +1,30 @@
 .streamlit/secrets.toml
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.env.*
+!.env.example
+.venv/
+.venv*/
+venv/
+.vscode/
+
+# Cache local régénérable (aucun secret)
+data_cache/
+
+# Données utilisateur locales
+portfolio.json
+trading_journal.json
+watchlist.json
+
+# Journaux, temporaires et bases locales
+*.log
+*.tmp
+*.sqlite
+*.sqlite3
+*.db
+
+# Résultats générés
+backtest_results/
+exports/
