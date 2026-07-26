@@ -28,14 +28,19 @@ def afficher_cockpit(st, cockpit, analyse_ia=None):
     donnees = cockpit if isinstance(cockpit, dict) else {}
     bandeau = donnees.get("bandeau", {})
     qualite = bandeau.get("qualite", "Indisponible")
+    sources = donnees.get("sources", {}) if isinstance(donnees.get("sources"), dict) else {}
+    yahoo = sources.get("Yahoo Finance", {})
+    openai = sources.get("OpenAI", {})
+    stockage = sources.get("Stockage local", {})
     badges = [
         _badge(f"Mise à jour · {bandeau.get('mise_a_jour', 'Indisponible')}"),
-        _badge(f"Connexion · {bandeau.get('connexion', 'Indisponible')}", "bon" if bandeau.get("connexion") == "Connectée" else "partiel"),
-        _badge(f"OpenAI · {bandeau.get('openai', 'Indisponible')}", "bon" if bandeau.get("openai") == "Configuré" else "partiel"),
-        _badge(f"Yahoo · {bandeau.get('yahoo', 'Indisponible')}", "bon" if bandeau.get("yahoo") == "Disponible" else "attention"),
-        _badge(f"Qualité · {qualite}", "bon" if qualite == "Bonne" else "partiel"),
+        _badge(f"Yahoo · {yahoo.get('etat', 'Non vérifié')}", "bon" if yahoo.get("etat") == "Données reçues" else "partiel"),
+        _badge(f"OpenAI · {openai.get('etat', 'Non vérifié')}", "bon" if openai.get("etat") == "Configuré" else "partiel"),
+        _badge(f"Stockage · {stockage.get('etat', 'Non vérifié')}", "bon" if stockage.get("etat") == "Chargé" else "partiel"),
+        _badge(f"Qualité · {qualite}", "bon" if qualite == "Bonne" else ("attention" if qualite == "Faible" else "partiel")),
     ]
     st.markdown('<div class="awt-card">' + "".join(badges) + "</div>", unsafe_allow_html=True)
+    st.caption(bandeau.get("justification_qualite", "Qualité non évaluée."))
 
     marche = donnees.get("marche", {})
     portefeuille = donnees.get("portefeuille", {})
@@ -121,9 +126,13 @@ def afficher_cockpit(st, cockpit, analyse_ia=None):
     st.subheader("🗓️ Évènements de marché")
     evenements = agenda.get("evenements", [])
     if not evenements:
-        st.info(agenda.get("message", "Aucun évènement fiable disponible."))
+        st.info(agenda.get("message", "Aucun événement disponible."))
     else:
         for evenement in evenements:
-            st.write(f"• {evenement}")
+            if not isinstance(evenement, dict):
+                continue
+            titre = evenement.get("titre", "Événement")
+            details = " · ".join(x for x in (evenement.get("date"), evenement.get("source")) if isinstance(x, str) and x)
+            st.markdown(f"**{titre}**" + (f" — {details}" if details else ""))
     st.caption("Les informations présentées ne constituent ni une garantie de gain ni un ordre automatique.")
     return demande_ia

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import pandas as pd
 import streamlit as st
 import yfinance as yf
@@ -27,19 +28,43 @@ def recuperer_infos(symbole: str):
         return {}
 
 
+def _nombre_fini(valeur):
+    if isinstance(valeur, bool):
+        return None
+    try:
+        nombre = float(valeur)
+    except (TypeError, ValueError):
+        return None
+    return nombre if math.isfinite(nombre) else None
+
+
 def dernier_prix(dataframe):
-    return round(float(dataframe["Close"].iloc[-1]), 2) if dataframe is not None and not dataframe.empty else 0.0
+    try:
+        valeur = dataframe["Close"].iloc[-1] if dataframe is not None and not dataframe.empty else None
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return 0.0
+    nombre = _nombre_fini(valeur)
+    return round(nombre, 2) if nombre is not None and nombre > 0 else 0.0
 
 
 def variation_journaliere(dataframe):
-    if dataframe is None or len(dataframe) < 2:
+    try:
+        if dataframe is None or len(dataframe) < 2:
+            return 0.0
+        precedent = _nombre_fini(dataframe["Close"].iloc[-2])
+    except (KeyError, IndexError, TypeError, AttributeError):
         return 0.0
-    precedent = float(dataframe["Close"].iloc[-2])
-    return round((dernier_prix(dataframe) - precedent) / precedent * 100, 2) if precedent else 0.0
+    actuel = dernier_prix(dataframe)
+    return round((actuel - precedent) / precedent * 100, 2) if precedent is not None and precedent > 0 and actuel > 0 else 0.0
 
 
 def dernier_volume(dataframe):
-    return int(dataframe["Volume"].iloc[-1]) if dataframe is not None and not dataframe.empty else 0
+    try:
+        valeur = dataframe["Volume"].iloc[-1] if dataframe is not None and not dataframe.empty else None
+    except (KeyError, IndexError, TypeError, AttributeError):
+        return 0
+    nombre = _nombre_fini(valeur)
+    return int(nombre) if nombre is not None and nombre >= 0 else 0
 
 
 def snapshot(symbole):
@@ -58,9 +83,11 @@ def _recuperer_liste(actifs):
     return resultat
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def recuperer_indices():
     return _recuperer_liste(MARKET_INDICES)
 
 
+@st.cache_data(ttl=CACHE_TTL, show_spinner=False)
 def recuperer_cryptos():
     return _recuperer_liste(CRYPTO_ASSETS)

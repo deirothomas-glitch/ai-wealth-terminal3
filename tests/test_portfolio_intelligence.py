@@ -13,7 +13,7 @@ class PortfolioIntelligenceTests(unittest.TestCase):
         self.assertTrue(resultat["portefeuille_vide"])
         self.assertEqual(resultat["valeur_totale"], 0.0)
         self.assertEqual(resultat["diversification"]["niveau"], "Faible")
-        self.assertEqual(resultat["qualite_analyse"], "Insuffisante")
+        self.assertEqual(resultat["qualite_analyse"], "Faible")
         json.dumps(resultat, ensure_ascii=False, allow_nan=False)
 
     def test_portefeuille_non_charge_ne_devient_pas_un_portefeuille_vide(self):
@@ -55,7 +55,7 @@ class PortfolioIntelligenceTests(unittest.TestCase):
             {"AAPL": 100},
         )
         self.assertEqual(resultat["valeur_totale"], 100.0)
-        self.assertEqual(resultat["qualite_analyse"], "Partielle")
+        self.assertEqual(resultat["qualite_analyse"], "Moyenne")
         self.assertEqual(resultat["donnees_manquantes"]["prix_absents"], ["MSFT"])
         self.assertIn("MSFT : valorisation impossible.", resultat["donnees_manquantes"]["valeurs_impossibles"])
 
@@ -66,7 +66,7 @@ class PortfolioIntelligenceTests(unittest.TestCase):
         )
         self.assertIsNone(resultat["valeur_totale"])
         self.assertEqual(resultat["positions_valorisees"], 0)
-        self.assertEqual(resultat["qualite_analyse"], "Insuffisante")
+        self.assertEqual(resultat["qualite_analyse"], "Faible")
         self.assertTrue(resultat["donnees_manquantes"]["positions_incompletes"])
         json.dumps(resultat, ensure_ascii=False, allow_nan=False)
 

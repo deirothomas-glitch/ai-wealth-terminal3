@@ -32,7 +32,7 @@ def afficher_intelligence_portefeuille(interface, analyse, compact=False):
 
     qualite = donnees.get("qualite_analyse", "Insuffisante")
     niveau = donnees.get("diversification", {}).get("niveau", "Faible")
-    classe_qualite = "awt-badge--good" if qualite == "Bonne" else ("awt-badge--warn" if qualite == "Partielle" else "awt-badge--bad")
+    classe_qualite = "awt-badge--good" if qualite == "Bonne" else ("awt-badge--warn" if qualite == "Moyenne" else "awt-badge--bad")
     classe_diversification = "awt-badge--good" if niveau == "Bonne" else ("awt-badge--warn" if niveau == "Modérée" else "awt-badge--bad")
     ui.markdown(
         '<div class="awt-card">'
@@ -54,6 +54,7 @@ def afficher_intelligence_portefeuille(interface, analyse, compact=False):
         colonnes = ui.columns(taille_ligne)
         for colonne, (libelle, valeur) in zip(colonnes, groupe):
             colonne.metric(libelle, valeur)
+    ui.caption(donnees.get("justification_qualite", "Qualité non évaluée."))
     ui.caption(donnees.get("diversification", {}).get("justification", "Diversification non évaluée."))
 
     repartition = donnees.get("repartition_types", [])

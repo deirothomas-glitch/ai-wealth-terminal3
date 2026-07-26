@@ -6,6 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from core.data_quality import evaluer_qualite_globale
 from core.portfolio import convertir_nombre_positif, normaliser_position
 
 TYPES_ORDONNES = ("action", "ETF", "crypto", "autre")
@@ -146,7 +147,12 @@ def analyser_portefeuille(positions: Any, prix_courants: Any) -> dict[str, Any]:
         "positions_incompletes": list(dict.fromkeys(positions_incompletes)),
     }
     incomplet = any(manquantes.values())
-    qualite = "Bonne" if agregats and not incomplet else ("Partielle" if agregats else "Insuffisante")
+    qualite = evaluer_qualite_globale({
+        "Portefeuille": {
+            "disponible": bool(agregats),
+            "complet": bool(agregats) and not incomplet,
+        }
+    })
     resultat = {
         "donnees_chargees": donnees_chargees,
         "portefeuille_vide": donnees_chargees and not sources,
@@ -164,7 +170,8 @@ def analyser_portefeuille(positions: Any, prix_courants: Any) -> dict[str, Any]:
         "principales_positions": principales_positions,
         "constats": constats,
         "donnees_manquantes": manquantes,
-        "qualite_analyse": qualite,
+        "qualite_analyse": qualite["niveau"],
+        "justification_qualite": qualite["justification"],
         "rappel_prudence": RAPPEL_PRUDENCE,
     }
     json.dumps(resultat, ensure_ascii=False, allow_nan=False)

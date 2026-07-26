@@ -55,8 +55,10 @@ def _preparer_cockpit(indices_marche, cryptos_marche):
         journal=session.get("trading_journal", []),
         alertes=session.get("alertes_positions", []),
         actualites=session.get("actualites_marche", []),
+        evenements=session.get("evenements_marche", []),
         portefeuille_charge="portfolio" in session,
         openai_disponible=openai_disponible,
+        yahoo_interroge=True,
         mise_a_jour=datetime.now().astimezone().strftime("%d/%m/%Y %H:%M"),
     )
 

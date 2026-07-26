@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any, Mapping, Sequence
 
+from core.data_quality import construire_etat_sources, evaluer_qualite_globale
 from core.portfolio import construire_resume_global, convertir_nombre_fini
 from core.portfolio_intelligence import analyser_portefeuille
 from core.scenario_engine import construire_scenarios
@@ -45,16 +46,6 @@ def _sentiment(actualites: list[dict[str, Any]]) -> str:
     if negatifs > positifs:
         return "Plutôt négatif"
     return "Partagé"
-
-
-def _qualite_globale(marche_disponible: bool, opportunites, portefeuille_charge: bool, actualites) -> str:
-    disponibles = sum((marche_disponible, bool(opportunites), portefeuille_charge, bool(actualites)))
-    niveaux = {_texte(x.get("qualite_donnees"), "insuffisant").casefold() for x in opportunites}
-    if disponibles == 0:
-        return "Indisponible"
-    if "insuffisant" in niveaux or disponibles < 3:
-        return "Partielle"
-    return "Bonne"
 
 
 def _top_opportunites(opportunites: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -121,6 +112,30 @@ def _resume_portefeuille(positions, prix, journal, portefeuille_charge):
     }
 
 
+
+def _construire_agenda(evenements):
+    resultat = []
+    identifiants = set()
+    for evenement in _liste(evenements):
+        titre = _texte(evenement.get("titre"), "")
+        if not titre:
+            continue
+        date_evenement = _texte(evenement.get("date"), "")
+        source = _texte(evenement.get("source"), "")
+        cle = (titre, date_evenement, source)
+        if cle in identifiants:
+            continue
+        identifiants.add(cle)
+        resultat.append({"titre": titre, "date": date_evenement or None, "source": source or None})
+        if len(resultat) >= 10:
+            break
+    return {
+        "titre": "Évènements de marché",
+        "evenements": resultat,
+        "message": "Aucun événement disponible." if not resultat else "",
+    }
+
+
 def construire_cockpit(
     *,
     indices=None,
@@ -131,8 +146,10 @@ def construire_cockpit(
     journal=None,
     alertes=None,
     actualites=None,
+    evenements=None,
     portefeuille_charge=False,
     openai_disponible=False,
+    yahoo_interroge=False,
     mise_a_jour="",
 ) -> dict[str, Any]:
     """Agrège les contrats existants sans mutation, réseau ou donnée inventée."""
@@ -144,10 +161,10 @@ def construire_cockpit(
     journal_valide = _liste(journal)
     alertes_valides = _liste(alertes)
     actualites_valides = _liste(actualites)
+    agenda = _construire_agenda(evenements)
     prix_valides = dict(prix_portefeuille) if isinstance(prix_portefeuille, Mapping) else {}
     tendance, variation_moyenne = _tendance(marche)
     yahoo_disponible = bool(marche)
-    qualite = _qualite_globale(yahoo_disponible, opportunites_valides, bool(portefeuille_charge), actualites_valides)
     alertes_prioritaires = _alertes_prioritaires(alertes_valides)
     symboles = {
         _texte(x.get("symbole"), "") for x in positions_valides + opportunites_valides
@@ -159,6 +176,34 @@ def construire_cockpit(
     intelligence_portefeuille = analyser_portefeuille(
         positions if portefeuille_charge else None,
         prix_valides,
+    )
+    qualite_globale = evaluer_qualite_globale({
+        "Marché": {
+            "disponible": yahoo_disponible,
+            "complet": bool(indices_valides) and bool(cryptos_valides),
+        },
+        "Scanner": {
+            "disponible": bool(opportunites_valides),
+            "complet": bool(opportunites_valides) and all(
+                _texte(x.get("qualite_donnees"), "insuffisant").casefold() != "insuffisant"
+                for x in opportunites_valides
+            ),
+        },
+        "Portefeuille": {
+            "disponible": bool(portefeuille_charge) and intelligence_portefeuille["positions_valorisees"] > 0,
+            "complet": intelligence_portefeuille["qualite_analyse"] == "Bonne",
+        },
+        "Actualités": {
+            "disponible": bool(actualites_valides),
+            "complet": bool(actualites_valides),
+        },
+    })
+    qualite = qualite_globale["niveau"]
+    etat_sources = construire_etat_sources(
+        yahoo_interroge=yahoo_interroge,
+        yahoo_disponible=yahoo_disponible if yahoo_interroge else None,
+        openai_configure=openai_disponible,
+        stockage_charge=bool(portefeuille_charge),
     )
     if not portefeuille_charge:
         resume_portefeuille = "Indisponible"
@@ -195,11 +240,15 @@ def construire_cockpit(
     return {
         "bandeau": {
             "mise_a_jour": _texte(mise_a_jour),
-            "connexion": "Connectée" if yahoo_disponible else "Données indisponibles",
-            "openai": "Configuré" if openai_disponible else "Non configuré",
-            "yahoo": "Disponible" if yahoo_disponible else "Indisponible",
+            "connexion": etat_sources["Yahoo Finance"]["etat"],
+            "openai": etat_sources["OpenAI"]["etat"],
+            "yahoo": etat_sources["Yahoo Finance"]["etat"],
+            "stockage": etat_sources["Stockage local"]["etat"],
             "qualite": qualite,
+            "justification_qualite": qualite_globale["justification"],
         },
+        "sources": etat_sources,
+        "qualite_donnees": qualite_globale,
         "marche": {
             "tendance": tendance,
             "variation_moyenne": variation_moyenne,
@@ -222,9 +271,5 @@ def construire_cockpit(
             "points_vigilance": vigilances,
             "donnees_partielles": donnees_partielles,
         },
-        "agenda": {
-            "titre": "Évènements de marché",
-            "evenements": [],
-            "message": "Aucun calendrier de marché fiable n’est connecté pour le moment.",
-        },
+        "agenda": agenda,
     }

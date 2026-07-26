@@ -38,15 +38,16 @@ class CockpitTests(unittest.TestCase):
         premier = construire_cockpit(**entree); second = construire_cockpit(**entree)
         self.assertEqual(premier, second)
         self.assertEqual(entree, avant)
-        self.assertEqual(list(premier), ["bandeau", "marche", "portefeuille", "intelligence_portefeuille", "opportunites", "alertes", "scenario_principal", "briefing", "agenda"])
+        self.assertEqual(list(premier), ["bandeau", "sources", "qualite_donnees", "marche", "portefeuille", "intelligence_portefeuille", "opportunites", "alertes", "scenario_principal", "briefing", "agenda"])
         json.dumps(premier, ensure_ascii=False, allow_nan=False)
 
     def test_bandeau_repose_uniquement_sur_disponibilites_reelles(self):
         cockpit = construire_cockpit(mise_a_jour="maintenant")
-        self.assertEqual(cockpit["bandeau"]["connexion"], "Données indisponibles")
-        self.assertEqual(cockpit["bandeau"]["yahoo"], "Indisponible")
+        self.assertEqual(cockpit["bandeau"]["connexion"], "Non vérifié")
+        self.assertEqual(cockpit["bandeau"]["yahoo"], "Non vérifié")
         self.assertEqual(cockpit["bandeau"]["openai"], "Non configuré")
-        self.assertEqual(cockpit["bandeau"]["qualite"], "Indisponible")
+        self.assertEqual(cockpit["bandeau"]["stockage"], "Non chargé")
+        self.assertEqual(cockpit["bandeau"]["qualite"], "Faible")
 
     def test_marche_sans_volatilite_ne_linvente_pas(self):
         cockpit = construire_cockpit(**self.donnees())
@@ -97,7 +98,25 @@ class CockpitTests(unittest.TestCase):
         agenda = construire_cockpit()["agenda"]
         self.assertEqual(agenda["titre"], "Évènements de marché")
         self.assertEqual(agenda["evenements"], [])
-        self.assertIn("Aucun calendrier", agenda["message"])
+        self.assertEqual(agenda["message"], "Aucun événement disponible.")
+
+    def test_agenda_affiche_uniquement_evenements_reels_valides_et_uniques(self):
+        cockpit = construire_cockpit(evenements=[
+            {"titre": "Publication inflation", "date": "2026-08-01", "source": "Calendrier public"},
+            {"titre": "Publication inflation", "date": "2026-08-01", "source": "Calendrier public"},
+            {"date": "2026-08-02"},
+            None,
+        ])
+        self.assertEqual(cockpit["agenda"]["evenements"], [{
+            "titre": "Publication inflation", "date": "2026-08-01", "source": "Calendrier public",
+        }])
+        self.assertEqual(cockpit["agenda"]["message"], "")
+
+    def test_sources_ne_simulent_pas_de_connexion(self):
+        cockpit = construire_cockpit(indices=[{"variation": 1.0}])
+        self.assertEqual(cockpit["sources"]["Yahoo Finance"]["etat"], "Non vérifié")
+        interroge = construire_cockpit(indices=[{"variation": 1.0}], yahoo_interroge=True)
+        self.assertEqual(interroge["sources"]["Yahoo Finance"]["etat"], "Données reçues")
 
 
 if __name__ == "__main__":
