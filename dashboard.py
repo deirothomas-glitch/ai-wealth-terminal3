@@ -39,6 +39,18 @@ def _cartes_marche(titre, elements):
 def afficher_dashboard():
     st.title(APP_NAME)
     st.caption(f"Version {APP_VERSION} · Tableau de bord de marché")
+    if hasattr(st, "session_state"):
+        positions_session = st.session_state.get("portfolio", [])
+        opportunites_session = st.session_state.get("opportunites_classees", [])
+        alertes_session = st.session_state.get("alertes_positions", [])
+        actualites_session = st.session_state.get("actualites_marche", [])
+        st.subheader("Vue d’ensemble")
+        cartes = st.columns(4)
+        cartes[0].metric("Positions suivies", len(positions_session) if isinstance(positions_session, list) else 0)
+        cartes[1].metric("Opportunités", len(opportunites_session) if isinstance(opportunites_session, list) else 0)
+        cartes[2].metric("Alertes importantes", len(alertes_session) if isinstance(alertes_session, list) else 0)
+        cartes[3].metric("Actualités disponibles", len(actualites_session) if isinstance(actualites_session, list) else 0)
+        st.caption("Synthèse construite à partir des données déjà chargées dans la session.")
     indices_marche = recuperer_indices()
     cryptos_marche = recuperer_cryptos()
     _cartes_marche("🌍 Marchés mondiaux", indices_marche)
@@ -68,7 +80,8 @@ def afficher_dashboard():
             qualite={"niveau": "partiel" if not actualites_briefing else "bon"},
             date_generation=date.today().isoformat(),
         )
-        afficher_briefing(briefing)
+        briefing_affichage = {**briefing, "opportunites_a_surveiller": []}
+        afficher_briefing(briefing_affichage)
         if st.button("🤖 Générer la synthèse IA du briefing", key="briefing_ia"):
             with st.spinner("Synthèse du briefing en cours..."):
                 contexte_briefing = construire_contexte_analyse(

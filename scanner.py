@@ -1,6 +1,7 @@
 """Scanner de la watchlist, déclenché manuellement pour limiter les appels marché."""
 
 import pandas as pd
+from html import escape
 import streamlit as st
 
 from ai_analysis import analyser_actif
@@ -86,11 +87,24 @@ def afficher_scanner():
         st.info("Aucun actif ne correspond à ces filtres.")
         return
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("📊 Actifs", len(filtre))
+    col1.metric("📊 Actifs analysés", len(filtre))
     col2.metric("📈 Score moyen", round(filtre["Score"].mean(), 1))
     meilleur = filtre.iloc[0]
-    col3.metric("🥇 Meilleur", meilleur["Actif"])
-    col4.metric("⭐ Score", meilleur["Score"])
+    col3.metric("🥇 En tête", meilleur["Actif"])
+    col4.metric("⭐ Score technique", meilleur["Score"])
+    opportunite_tete = next((x for x in opportunites if x.get("symbole") == meilleur["Actif"]), {})
+    qualite_tete = escape(str(opportunite_tete.get("qualite_donnees", "non évaluée")))
+    risque_tete = "disponible" if opportunite_tete.get("plan_risque_disponible") else "à compléter"
+    volatilite_tete = escape(str(opportunite_tete.get("volatilite", "non calculée")))
+    classe_qualite = "awt-badge--good" if qualite_tete == "bon" else "awt-badge--warn"
+    classe_risque = "awt-badge--good" if risque_tete == "disponible" else "awt-badge--warn"
+    st.markdown(
+        f'<span class="awt-badge awt-badge--good">Score · {int(meilleur["Score"])}/100</span>'
+        f'<span class="awt-badge {classe_qualite}">Qualité · {qualite_tete}</span>'
+        f'<span class="awt-badge {classe_risque}">Risque · {risque_tete}</span>'
+        f'<span class="awt-badge">Volatilité · {volatilite_tete}</span>',
+        unsafe_allow_html=True,
+    )
 
     colonnes_masquees = ["Raisons", "Historique", "Ventilation"]
     st.dataframe(
